@@ -2,30 +2,49 @@ package types
 
 import "time"
 
-// Proposal represents a block proposal
-type Proposal struct {
-	ID         []byte
-	Round      uint64
-	Wave       uint64
-	Block      Block
-	Proposer   []byte
-	Timestamp  time.Time
-	References []Reference
-	StateRoot  []byte
-	Signature  []byte
-	Status     ProposalStatus
+// ConsensusConfig holds the configuration for the consensus engine
+type ConsensusConfig struct {
+	// Wave timing parameters
+	WaveTimeout   time.Duration
+	RoundDuration time.Duration
+
+	// Validator parameters
+	ValidatorSet []string
+	QuorumSize   int
+
+	// Network parameters
+	ListenAddr string
+	Seeds     []string
 }
 
-// Vote represents a vote on a proposal
+// Proposal represents a block proposal in the consensus
+type Proposal struct {
+	ID        []byte
+	Wave      uint64
+	Round     uint64
+	Block     *Block
+	Proposer  []byte
+	Timestamp time.Time
+	Status    ConsensusStatus
+}
+
+// Vote represents a validator's vote on a proposal
 type Vote struct {
 	ProposalID []byte
-	Validator  []byte
-	Round      uint64
 	Wave       uint64
-	Timestamp  time.Time
-	Signature  []byte
+	Round      uint64
+	Validator  []byte
 	Type       VoteType
+	Timestamp  time.Time
 }
+
+// VoteType represents the type of vote
+type VoteType int
+
+const (
+	VoteTypeApprove VoteType = iota
+	VoteTypeReject
+)
 
 // Complaint represents a complaint about a block
 type Complaint struct {
@@ -54,29 +73,20 @@ type WaveState struct {
 	CausalOrder    map[string]uint64
 }
 
-// ProposalStatus represents the status of a proposal
-type ProposalStatus uint8
+// ConsensusStatus represents the status of a proposal
+type ConsensusStatus int
 
 const (
-	ProposalStatusPending ProposalStatus = iota
-	ProposalStatusValidating
-	ProposalStatusValid
-	ProposalStatusInvalid
-	ProposalStatusCertified
-	ProposalStatusCommitted
-)
-
-// VoteType represents the type of vote
-type VoteType uint8
-
-const (
-	VoteTypeApprove VoteType = iota
-	VoteTypeReject
-	VoteTypeAbstain
+	ConsensusStatusPending ConsensusStatus = iota
+	ConsensusStatusValidating
+	ConsensusStatusValid
+	ConsensusStatusInvalid
+	ConsensusStatusCertified
+	ConsensusStatusCommitted
 )
 
 // WaveStatus represents the status of a wave
-type WaveStatus uint8
+type WaveStatus int
 
 const (
 	WaveStatusInitializing WaveStatus = iota

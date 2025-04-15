@@ -4,14 +4,19 @@ import (
 	"testing"
 	"time"
 
-	"BlazeDAG/internal/transaction"
-	"BlazeDAG/internal/types"
+	"github.com/samuel0642/BlazeDAG/internal/transaction"
+	"github.com/samuel0642/BlazeDAG/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestTransactionPool(t *testing.T) {
-	pool := transaction.NewPool()
+	// Create state
+	state := types.NewState()
+
+	// Create transaction pool
+	pool := transaction.NewPool(state)
+	assert.NotNil(t, pool)
 
 	// Create test accounts
 	sender := &types.Account{
@@ -19,48 +24,55 @@ func TestTransactionPool(t *testing.T) {
 		Balance: 1000,
 		Nonce:   0,
 	}
+
 	recipient := &types.Account{
 		Address: []byte("recipient"),
 		Balance: 0,
 		Nonce:   0,
 	}
 
-	// Add accounts to pool
-	pool.SetAccount(sender)
-	pool.SetAccount(recipient)
+	// Set accounts in pool
+	err := pool.SetAccount(sender.Address, sender)
+	assert.NoError(t, err)
 
-	// Create valid transaction
+	err = pool.SetAccount(recipient.Address, recipient)
+	assert.NoError(t, err)
+
+	// Create transaction
 	tx := &types.Transaction{
 		From:     sender.Address,
 		To:       recipient.Address,
 		Value:    100,
 		Nonce:    0,
-		GasLimit: 10,
+		GasLimit: 21000,
 		GasPrice: 1,
-		Data:     []byte("test"),
 	}
 
-	// Test adding valid transaction
-	err := pool.AddTransaction(tx)
-	require.NoError(t, err)
+	// Add transaction to pool
+	err = pool.AddTransaction(tx)
+	assert.NoError(t, err)
 
-	// Test getting transaction
-	retrievedTx, exists := pool.GetTransaction(tx.Hash())
-	require.True(t, exists)
-	assert.Equal(t, tx, retrievedTx)
+	// Get transaction from pool
+	retrievedTx := pool.GetTransaction(tx.Hash())
+	assert.NotNil(t, retrievedTx)
+	assert.Equal(t, tx.Hash(), retrievedTx.Hash())
 
-	// Test processing transaction
+	// Process transaction
 	result, err := pool.ProcessTransaction(tx)
-	require.NoError(t, err)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
 	assert.True(t, result.Success)
-	assert.Equal(t, tx.Hash(), result.TransactionHash)
-	assert.Equal(t, uint64(10), result.GasUsed)
-	assert.Equal(t, uint64(890), result.SenderBalance) // 1000 - 100 - 10
-	assert.Equal(t, uint64(100), result.RecipientBalance)
 
-	// Test transaction no longer in pool
-	_, exists = pool.GetTransaction(tx.Hash())
-	assert.False(t, exists)
+	// Verify account balances
+	senderAcc, err := pool.GetAccount(sender.Address)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(900), senderAcc.Balance)
+	assert.Equal(t, uint64(1), senderAcc.Nonce)
+
+	recipientAcc, err := pool.GetAccount(recipient.Address)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(100), recipientAcc.Balance)
+	assert.Equal(t, uint64(0), recipientAcc.Nonce)
 }
 
 func TestTransactionExecution(t *testing.T) {

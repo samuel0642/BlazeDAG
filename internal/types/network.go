@@ -2,16 +2,27 @@ package types
 
 import "time"
 
-// NetworkMessage represents a network message
+// Peer represents a network peer
+type Peer struct {
+	ID        string
+	Address   string
+	Active    bool
+	LastSeen  time.Time
+	Score     int
+}
+
+// NetworkMessage represents a message sent over the network
 type NetworkMessage struct {
 	Type      MessageType
 	Payload   []byte
-	Signature []byte
+	From      string
+	To        string
+	Sender    string
+	Recipient string
 	Timestamp time.Time
-	Sender    []byte
-	Recipient []byte
-	Priority  uint8
-	TTL       uint64
+	TTL       int
+	Signature []byte
+	Priority  int
 }
 
 // SyncRequest represents a sync request
@@ -52,7 +63,7 @@ type RecoveryResponse struct {
 }
 
 // MessageType represents the type of network message
-type MessageType uint8
+type MessageType int
 
 const (
 	MessageTypeBlock MessageType = iota
@@ -66,16 +77,17 @@ const (
 )
 
 // SyncRequestType represents the type of sync request
-type SyncRequestType uint8
+type SyncRequestType int
 
 const (
 	SyncRequestTypeFull SyncRequestType = iota
 	SyncRequestTypeIncremental
 	SyncRequestTypeFast
+	SyncRequestTypeCertificate
 )
 
 // SyncResponseType represents the type of sync response
-type SyncResponseType uint8
+type SyncResponseType int
 
 const (
 	SyncResponseTypeFull SyncResponseType = iota
@@ -84,7 +96,7 @@ const (
 )
 
 // RecoveryRequestType represents the type of recovery request
-type RecoveryRequestType uint8
+type RecoveryRequestType int
 
 const (
 	RecoveryRequestTypeBlock RecoveryRequestType = iota
@@ -93,7 +105,7 @@ const (
 )
 
 // RecoveryResponseType represents the type of recovery response
-type RecoveryResponseType uint8
+type RecoveryResponseType int
 
 const (
 	RecoveryResponseTypeBlock RecoveryResponseType = iota

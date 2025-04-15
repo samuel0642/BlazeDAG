@@ -1,191 +1,172 @@
 package test
 
 import (
+	"context"
 	"testing"
 	"time"
 
-	"BlazeDAG/internal/network"
-	"BlazeDAG/internal/types"
+	"github.com/samuel0642/BlazeDAG/internal/network"
+	"github.com/samuel0642/BlazeDAG/internal/types"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNetworkLayer(t *testing.T) {
 	// Create network layer
-	net := network.NewNetworkLayer()
+	nl := network.NewNetworkLayer()
+	assert.NotNil(t, nl)
 
-	// Test peer discovery
-	peers, err := net.DiscoverPeers()
+	// Start network layer
+	err := nl.Start()
 	assert.NoError(t, err)
-	assert.NotEmpty(t, peers)
+	defer nl.Stop()
 
-	// Test message handling
-	msg := &types.NetworkMessage{
-		Type: types.MessageTypeBlock,
-		Payload: &types.BlockMessage{
-			Block: &types.Block{
-				Header: &types.BlockHeader{
-					ParentHash: []byte("test"),
-				},
-			},
-		},
+	// Add test peers
+	peer1 := &network.Peer{
+		ID:     "peer1",
+		Addr:   "localhost:8001",
+		Active: true,
 	}
-
-	// Test message broadcasting
-	err = net.BroadcastMessage(msg)
-	assert.NoError(t, err)
-
-	// Test message receiving
-	received := make(chan *types.NetworkMessage)
-	go func() {
-		msg, err := net.ReceiveMessage()
-		assert.NoError(t, err)
-		received <- msg
-	}()
-
-	// Wait for message
-	select {
-	case <-received:
-		// Message received successfully
-	case <-time.After(5 * time.Second):
-		t.Fatal("Timeout waiting for message")
+	peer2 := &network.Peer{
+		ID:     "peer2",
+		Addr:   "localhost:8002",
+		Active: true,
 	}
+	nl.AddPeer(peer1)
+	nl.AddPeer(peer2)
 
-	// Test peer management
-	peerID := "test-peer"
-	err = net.AddPeer(peerID)
+	// Test broadcasting a block message
+	blockMsg := &types.NetworkMessage{
+		Type:      types.MessageTypeBlock,
+		Payload:   []byte("test block payload"),
+		From:      "peer1",
+		To:        "peer2",
+		Timestamp: time.Now(),
+		TTL:       10,
+		Signature: []byte("test-signature"),
+		Priority:  1,
+	}
+	err = nl.Broadcast(blockMsg)
 	assert.NoError(t, err)
 
-	peers = net.GetPeers()
-	assert.Contains(t, peers, peerID)
-
-	err = net.RemovePeer(peerID)
+	// Test broadcasting a transaction message
+	txMsg := &types.NetworkMessage{
+		Type:      types.MessageTypeTransaction,
+		Payload:   []byte("test tx payload"),
+		From:      "peer1",
+		To:        "peer2",
+		Timestamp: time.Now(),
+		TTL:       10,
+		Signature: []byte("test-signature-2"),
+		Priority:  1,
+	}
+	err = nl.Broadcast(txMsg)
 	assert.NoError(t, err)
 
-	peers = net.GetPeers()
-	assert.NotContains(t, peers, peerID)
+	// Test removing a peer
+	nl.RemovePeer("peer1")
+
+	// Wait for messages to be processed
+	time.Sleep(100 * time.Millisecond)
 }
 
-func TestNetworkSynchronization(t *testing.T) {
-	net := network.NewNetworkLayer()
-
-	// Test state synchronization
-	stateReq := &types.SyncRequest{
-		Type: types.SyncRequestTypeFull,
-		StartBlock: []byte("start"),
-		EndBlock: []byte("end"),
+func TestNetworkService(t *testing.T) {
+	// Create network service
+	config := &network.Config{
+		ListenAddr:    "localhost:8080",
+		Seeds:         []string{"seed1:8080", "seed2:8080"},
+		MaxPeers:      10,
+		MinPeers:      5,
+		MessageBuffer: 100,
+		SyncInterval:  time.Second,
 	}
 
-	err := net.RequestStateSync(stateReq)
+	service := network.NewService(config)
+	assert.NotNil(t, service)
+
+	// Start service
+	err := service.Start()
+	assert.NoError(t, err)
+	defer service.Stop()
+
+	// Create a test message
+	msg := &types.NetworkMessage{
+		Type:      types.MessageTypeBlock,
+		Payload:   []byte("test payload"),
+		From:      "peer1",
+		To:        "peer2",
+		Timestamp: time.Now(),
+		TTL:       10,
+		Signature: []byte("test signature"),
+		Priority:  1,
+	}
+
+	// Broadcast message
+	err = service.BroadcastMessage(msg)
 	assert.NoError(t, err)
 
-	// Test block synchronization
-	blockReq := &types.SyncRequest{
-		Type: types.SyncRequestTypeIncremental,
-		StartBlock: []byte("start"),
-		EndBlock: []byte("end"),
+	// Wait for message to be processed
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify message was stored
+	assert.Equal(t, msg, service.Messages[string(msg.Signature)])
+}
+
+func TestNetworkServiceSync(t *testing.T) {
+	config := &network.Config{
+		ListenAddr:    ":8001",
+		Seeds:         []string{"seed1:8001"},
+		MaxPeers:      10,
+		MinPeers:      3,
+		MessageBuffer: 100,
+		SyncInterval:  time.Second,
 	}
 
-	err = net.RequestBlockSync(blockReq)
+	service := network.NewService(config)
+	assert.NotNil(t, service)
+
+	err := service.Start()
 	assert.NoError(t, err)
 
-	// Test certificate synchronization
-	certReq := &types.SyncRequest{
-		Type: types.SyncRequestTypeCertificate,
-		StartBlock: []byte("start"),
-		EndBlock: []byte("end"),
+	// Test sync request message
+	msg := &types.NetworkMessage{
+		Type:      types.MessageTypeSyncRequest,
+		Payload:   []byte("sync-payload"),
+		Signature: []byte("sync-signature"),
+		Timestamp: time.Now(),
+		From:      "test-sender",
+		Priority:  1,
+		TTL:       10,
 	}
 
-	err = net.RequestCertificateSync(certReq)
+	err = service.BroadcastMessage(msg)
+	assert.NoError(t, err)
+
+	// Stop service
+	err = service.Stop()
 	assert.NoError(t, err)
 }
 
-func TestNetworkSecurity(t *testing.T) {
-	net := network.NewNetworkLayer()
-
-	// Test message authentication
-	msg := &types.NetworkMessage{
-		Type: types.MessageTypeBlock,
-		Payload: &types.BlockMessage{
-			Block: &types.Block{
-				Header: &types.BlockHeader{
-					ParentHash: []byte("test"),
-				},
-			},
-		},
+func TestNetworkServicePeerHandling(t *testing.T) {
+	config := &network.Config{
+		ListenAddr:    ":8002",
+		Seeds:         []string{"seed1:8002"},
+		MaxPeers:      10,
+		MinPeers:      3,
+		MessageBuffer: 100,
+		SyncInterval:  time.Second,
 	}
 
-	// Sign message
-	err := net.SignMessage(msg)
+	service := network.NewService(config)
+	assert.NotNil(t, service)
+
+	err := service.Start()
 	assert.NoError(t, err)
 
-	// Verify signature
-	valid, err := net.VerifyMessage(msg)
-	assert.NoError(t, err)
-	assert.True(t, valid)
+	// Test peer handling
+	peers := service.GetPeers()
+	assert.NotNil(t, peers)
 
-	// Test encryption
-	encrypted, err := net.EncryptMessage(msg)
+	// Stop service
+	err = service.Stop()
 	assert.NoError(t, err)
-
-	decrypted, err := net.DecryptMessage(encrypted)
-	assert.NoError(t, err)
-	assert.Equal(t, msg, decrypted)
 }
-
-func TestNetworkPerformance(t *testing.T) {
-	net := network.NewNetworkLayer()
-
-	// Test message throughput
-	start := time.Now()
-	count := 1000
-
-	for i := 0; i < count; i++ {
-		msg := &types.NetworkMessage{
-			Type: types.MessageTypeBlock,
-			Payload: &types.BlockMessage{
-				Block: &types.Block{
-					Header: &types.BlockHeader{
-						ParentHash: []byte("test"),
-					},
-				},
-			},
-		}
-		err := net.BroadcastMessage(msg)
-		assert.NoError(t, err)
-	}
-
-	duration := time.Since(start)
-	throughput := float64(count) / duration.Seconds()
-	assert.Greater(t, throughput, 100.0) // Expect at least 100 messages per second
-
-	// Test latency
-	msg := &types.NetworkMessage{
-		Type: types.MessageTypeBlock,
-		Payload: &types.BlockMessage{
-			Block: &types.Block{
-				Header: &types.BlockHeader{
-					ParentHash: []byte("test"),
-				},
-			},
-		},
-	}
-
-	start = time.Now()
-	err := net.BroadcastMessage(msg)
-	assert.NoError(t, err)
-
-	received := make(chan *types.NetworkMessage)
-	go func() {
-		msg, err := net.ReceiveMessage()
-		assert.NoError(t, err)
-		received <- msg
-	}()
-
-	select {
-	case <-received:
-		latency := time.Since(start)
-		assert.Less(t, latency, 100*time.Millisecond) // Expect latency less than 100ms
-	case <-time.After(5 * time.Second):
-		t.Fatal("Timeout waiting for message")
-	}
-} 

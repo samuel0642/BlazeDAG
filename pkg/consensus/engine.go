@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"BlazeDAG/internal/types"
+	"github.com/samuel0642/BlazeDAG/internal/types"
 )
 
 // Engine represents the consensus engine

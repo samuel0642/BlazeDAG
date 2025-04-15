@@ -1,4 +1,4 @@
-module BlazeDAG
+module github.com/samuel0642/BlazeDAG
 
 go 1.21
 

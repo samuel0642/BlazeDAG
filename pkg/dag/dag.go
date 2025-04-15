@@ -1,18 +1,23 @@
 package dag
 
 import (
+	"errors"
 	"sync"
 
-	"BlazeDAG/internal/types"
+	"github.com/samuel0642/BlazeDAG/internal/types"
 )
 
-// DAG represents the directed acyclic graph structure
-type DAG struct {
-	mu sync.RWMutex
+var (
+	ErrBlockExists     = errors.New("block already exists")
+	ErrInvalidBlock    = errors.New("invalid block")
+	ErrParentNotFound  = errors.New("parent block not found")
+)
 
-	// Blocks
+// DAG represents a directed acyclic graph of blocks
+type DAG struct {
 	blocks map[string]*types.Block
 	tips   map[string]bool
+	mu     sync.RWMutex
 
 	// References
 	references map[string][]string
@@ -33,7 +38,7 @@ func NewDAG() *DAG {
 		children:        make(map[string][]string),
 		committedBlocks: make(map[string]bool),
 		pendingBlocks:   make(map[string]bool),
-		causalOrder:    make(map[string]uint64),
+		causalOrder:     make(map[string]uint64),
 	}
 }
 
@@ -42,11 +47,31 @@ func (d *DAG) AddBlock(block *types.Block) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	// Convert block to string for map keys
-	blockHash := string(block.Header.ParentHash)
+	blockHash := string(block.Hash())
+
+	// Check if block already exists
+	if _, exists := d.blocks[blockHash]; exists {
+		return ErrBlockExists
+	}
+
+	// Check parent exists (except for genesis block)
+	parentHash := string(block.Header.ParentHash)
+	if len(d.blocks) > 0 {
+		if _, exists := d.blocks[parentHash]; !exists {
+			return ErrParentNotFound
+		}
+		// Remove parent from tips
+		delete(d.tips, parentHash)
+	}
 
 	// Add block
 	d.blocks[blockHash] = block
+	d.tips[blockHash] = true
+
+	// Remove referenced blocks from tips
+	for _, ref := range block.References {
+		delete(d.tips, string(ref.BlockHash))
+	}
 
 	// Add references
 	for _, ref := range block.References {
@@ -55,31 +80,78 @@ func (d *DAG) AddBlock(block *types.Block) error {
 		d.children[refHash] = append(d.children[refHash], blockHash)
 	}
 
-	// Update tips
-	d.updateTips(blockHash)
-
 	return nil
 }
 
-// GetBlock gets a block from the DAG
+// GetBlock retrieves a block by its hash
 func (d *DAG) GetBlock(hash []byte) (*types.Block, bool) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	block, ok := d.blocks[string(hash)]
-	return block, ok
+	block, exists := d.blocks[string(hash)]
+	return block, exists
 }
 
-// GetTips gets the current tips of the DAG
+// GetTips returns all tip blocks (blocks with no children)
 func (d *DAG) GetTips() [][]byte {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
 	tips := make([][]byte, 0, len(d.tips))
-	for tip := range d.tips {
-		tips = append(tips, []byte(tip))
+	for hash := range d.tips {
+		tips = append(tips, []byte(hash))
 	}
 	return tips
+}
+
+// GetBlocks returns all blocks in the DAG
+func (d *DAG) GetBlocks() []*types.Block {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	blocks := make([]*types.Block, 0, len(d.blocks))
+	for _, block := range d.blocks {
+		blocks = append(blocks, block)
+	}
+	return blocks
+}
+
+// GetBlocksByHeight returns all blocks at a specific height
+func (d *DAG) GetBlocksByHeight(height uint64) []*types.Block {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	blocks := make([]*types.Block, 0)
+	for _, block := range d.blocks {
+		if block.Header.Height == height {
+			blocks = append(blocks, block)
+		}
+	}
+	return blocks
+}
+
+// GetParent returns the parent block of a given block
+func (d *DAG) GetParent(block *types.Block) (*types.Block, bool) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	parent, exists := d.blocks[string(block.Header.ParentHash)]
+	return parent, exists
+}
+
+// GetChildren returns all child blocks of a given block
+func (d *DAG) GetChildren(block *types.Block) []*types.Block {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	children := make([]*types.Block, 0)
+	blockHash := block.Hash()
+	for _, b := range d.blocks {
+		if string(b.Header.ParentHash) == string(blockHash) {
+			children = append(children, b)
+		}
+	}
+	return children
 }
 
 // GetReferences gets the references of a block
@@ -93,19 +165,6 @@ func (d *DAG) GetReferences(hash []byte) [][]byte {
 		refHashes[i] = []byte(ref)
 	}
 	return refHashes
-}
-
-// GetChildren gets the children of a block
-func (d *DAG) GetChildren(hash []byte) [][]byte {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	children := d.children[string(hash)]
-	childHashes := make([][]byte, len(children))
-	for i, child := range children {
-		childHashes[i] = []byte(child)
-	}
-	return childHashes
 }
 
 // CommitBlock commits a block
@@ -181,6 +240,17 @@ func (d *DAG) updateCausalOrder(blockHash string) {
 			d.updateCausalOrder(child)
 		}
 	}
+}
+
+// GetBlocks returns all blocks in the DAG
+func (d *DAG) GetBlocks() map[string]*types.Block {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	blocks := make(map[string]*types.Block, len(d.blocks))
+	for k, v := range d.blocks {
+		blocks[k] = v
+	}
+	return blocks
 }
 
 // Errors
