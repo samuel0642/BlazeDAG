@@ -5,236 +5,276 @@ import (
 	"testing"
 	"time"
 
-	"BlazeDAG/internal/types"
-	"BlazeDAG/pkg/consensus"
+	"github.com/samuel0642/BlazeDAG/internal/consensus"
+	"github.com/samuel0642/BlazeDAG/internal/types"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestConsensusEngine(t *testing.T) {
-	// Create config
-	config := &consensus.Config{
-		RoundDuration:  1 * time.Second,
-		WaveTimeout:    5 * time.Second,
-		MaxValidators:  100,
-		MinValidators:  4,
-		QuorumSize:     3,
-		LeaderRotation: true,
+func TestConsensus_NewEngine(t *testing.T) {
+	config := consensus.Config{
+		TotalValidators: 3,
+		FaultTolerance:  1,
+		RoundDuration:   time.Second,
+		WaveTimeout:     time.Second,
 	}
 
-	// Create engine
+	engine := consensus.NewEngine(config)
+	assert.NotNil(t, engine)
+}
+
+func TestConsensus_HandleProposal(t *testing.T) {
+	config := consensus.Config{
+		TotalValidators: 3,
+		FaultTolerance:  1,
+		RoundDuration:   time.Second,
+		WaveTimeout:     time.Second,
+	}
+
 	engine := consensus.NewEngine(config)
 
-	// Start engine
-	err := engine.Start()
-	assert.NoError(t, err)
-
-	// Create proposal
-	proposal := &types.Proposal{
-		ID:        []byte("proposal1"),
-		Round:     1,
-		Wave:      1,
-		Proposer:  []byte("proposer1"),
-		Timestamp: time.Now(),
-		Status:    types.ProposalStatusPending,
-		Block: types.Block{
-			Header: types.BlockHeader{
-				Version:        1,
-				Round:          1,
-				Wave:           1,
-				Height:         1,
-				ParentHash:     []byte("parent"),
-				StateRoot:      []byte("state"),
-				TransactionRoot: []byte("transactions"),
-				ReceiptRoot:    []byte("receipts"),
-				Validator:      []byte("validator"),
-			},
-			Body: types.BlockBody{
-				Transactions: []types.Transaction{},
-				Receipts:     []types.Receipt{},
-				Events:       []types.Event{},
-			},
-		},
+	// Create a proposal
+	proposal := &consensus.Proposal{
+		BlockHash:  "proposal1",
+		Round:      1,
+		Sender:     "validator1",
+		Timestamp:  time.Now(),
 	}
 
-	// Submit proposal
-	err = engine.SubmitProposal(proposal)
+	// Handle proposal
+	err := engine.HandleProposal(proposal)
+	assert.NoError(t, err)
+}
+
+func TestConsensus_HandleVote(t *testing.T) {
+	config := consensus.Config{
+		TotalValidators: 3,
+		FaultTolerance:  1,
+		RoundDuration:   time.Second,
+		WaveTimeout:     time.Second,
+	}
+
+	engine := consensus.NewEngine(config)
+
+	// Create a vote
+	vote := &consensus.Vote{
+		BlockHash:  "proposal1",
+		Round:      1,
+		Sender:     "validator1",
+		Timestamp:  time.Now(),
+	}
+
+	// Handle vote
+	err := engine.HandleVote(vote)
+	assert.NoError(t, err)
+}
+
+func TestConsensus_Quorum(t *testing.T) {
+	config := consensus.Config{
+		TotalValidators: 3,
+		FaultTolerance:  1,
+		RoundDuration:   time.Second,
+		WaveTimeout:     time.Second,
+	}
+
+	engine := consensus.NewEngine(config)
+
+	// Create and handle a proposal
+	proposal := &consensus.Proposal{
+		BlockHash:  "proposal1",
+		Round:      1,
+		Sender:     "validator1",
+		Timestamp:  time.Now(),
+	}
+	err := engine.HandleProposal(proposal)
+	assert.NoError(t, err)
+
+	// Add votes to reach quorum
+	validators := []string{"validator1", "validator2", "validator3"}
+	for _, validator := range validators[:2] {
+		vote := &consensus.Vote{
+			BlockHash:  proposal.BlockHash,
+			Round:      1,
+			Sender:     validator,
+			Timestamp:  time.Now(),
+		}
+		err = engine.HandleVote(vote)
+		assert.NoError(t, err)
+	}
+
+	// Check quorum
+	hasQuorum := engine.HasQuorum(proposal.BlockHash, 1)
+	assert.True(t, hasQuorum)
+}
+
+func TestConsensus_CompleteWave(t *testing.T) {
+	config := consensus.Config{
+		TotalValidators: 3,
+		FaultTolerance: 1,
+		RoundDuration: time.Second,
+		WaveTimeout:   time.Second,
+	}
+
+	engine := consensus.NewEngine(config)
+
+	// Create and handle a proposal
+	proposal := &consensus.Proposal{
+		BlockHash:  "proposal1",
+		Round:     1,
+		Sender:    "validator1",
+		Timestamp: time.Now(),
+	}
+	err := engine.HandleProposal(proposal)
+	assert.NoError(t, err)
+
+	// Add votes to reach quorum
+	validators := []string{"validator1", "validator2", "validator3"}
+	for _, validator := range validators[:2] {
+		vote := &consensus.Vote{
+			BlockHash:  proposal.BlockHash,
+			Round:     1,
+			Sender:    validator,
+			Timestamp: time.Now(),
+		}
+		err = engine.HandleVote(vote)
+		assert.NoError(t, err)
+	}
+
+	// Check quorum
+	hasQuorum := engine.HasQuorum(proposal.BlockHash, 1)
+	assert.True(t, hasQuorum)
+}
+
+func TestConsensusEngine(t *testing.T) {
+	config := consensus.Config{
+		TotalValidators: 4,
+		FaultTolerance: 1,
+		RoundDuration: time.Second,
+		WaveTimeout:   5 * time.Second,
+	}
+
+	engine := consensus.NewEngine(config)
+
+	// Create proposal
+	proposal := &consensus.Proposal{
+		BlockHash:  "proposal1",
+		Round:     1,
+		Sender:    "proposer1",
+		Timestamp: time.Now(),
+	}
+
+	// Handle proposal
+	err := engine.HandleProposal(proposal)
 	assert.NoError(t, err)
 
 	// Create votes
-	votes := make([]*types.Vote, 3)
+	votes := make([]*consensus.Vote, 3)
 	for i := 0; i < 3; i++ {
-		votes[i] = &types.Vote{
-			ProposalID: []byte("proposal1"),
-			Validator:  []byte("validator"),
-			Round:      1,
-			Wave:       1,
-			Timestamp:  time.Now(),
-			Signature:  []byte("signature"),
-			Type:       types.VoteTypeApprove,
+		votes[i] = &consensus.Vote{
+			BlockHash:  "proposal1",
+			Round:     1,
+			Sender:    "validator" + string(i+'1'),
+			Timestamp: time.Now(),
 		}
 	}
 
 	// Submit votes
 	for _, vote := range votes {
-		err = engine.SubmitVote(vote)
+		err = engine.HandleVote(vote)
 		assert.NoError(t, err)
 	}
 
-	// Wait for block
-	select {
-	case block := <-engine.GetBlockChannel():
-		assert.NotNil(t, block)
-		assert.Equal(t, uint32(1), block.Header.Version)
-		assert.Equal(t, uint64(1), block.Header.Round)
-		assert.Equal(t, uint64(1), block.Header.Wave)
-	case <-time.After(5 * time.Second):
-		t.Fatal("Timeout waiting for block")
-	}
-
-	// Stop engine
-	err = engine.Stop()
-	assert.NoError(t, err)
+	// Check quorum
+	hasQuorum := engine.HasQuorum(proposal.BlockHash, 1)
+	assert.True(t, hasQuorum)
 }
 
 func TestConsensusEngineValidation(t *testing.T) {
-	// Create config
-	config := &consensus.Config{
-		RoundDuration:  1 * time.Second,
-		WaveTimeout:    5 * time.Second,
-		MaxValidators:  100,
-		MinValidators:  4,
-		QuorumSize:     3,
-		LeaderRotation: true,
+	config := consensus.Config{
+		TotalValidators: 4,
+		FaultTolerance: 1,
+		RoundDuration: time.Second,
+		WaveTimeout:   5 * time.Second,
 	}
 
-	// Create engine
 	engine := consensus.NewEngine(config)
 
-	// Start engine
-	err := engine.Start()
-	assert.NoError(t, err)
-
-	// Create invalid proposal
-	invalidProposal := &types.Proposal{
-		ID:        []byte("invalid"),
-		Round:     0, // Invalid round
-		Wave:      0, // Invalid wave
-		Proposer:  []byte("proposer"),
+	// Test invalid proposal (empty block hash)
+	invalidProposal := &consensus.Proposal{
+		BlockHash:  "",
+		Round:     1,
+		Sender:    "proposer1",
 		Timestamp: time.Now(),
-		Status:    types.ProposalStatusPending,
 	}
+	err := engine.HandleProposal(invalidProposal)
+	assert.Error(t, err)
 
-	// Submit invalid proposal
-	err = engine.SubmitProposal(invalidProposal)
+	// Test invalid vote (empty block hash)
+	invalidVote := &consensus.Vote{
+		BlockHash:  "",
+		Round:     1,
+		Sender:    "validator1",
+		Timestamp: time.Now(),
+	}
+	err = engine.HandleVote(invalidVote)
+	assert.Error(t, err)
+
+	// Test valid proposal and vote
+	validProposal := &consensus.Proposal{
+		BlockHash:  "validblock",
+		Round:     1,
+		Sender:    "proposer1",
+		Timestamp: time.Now(),
+	}
+	err = engine.HandleProposal(validProposal)
 	assert.NoError(t, err)
 
-	// Create invalid vote
-	invalidVote := &types.Vote{
-		ProposalID: []byte("invalid"),
-		Validator:  []byte("validator"),
-		Round:      0, // Invalid round
-		Wave:       0, // Invalid wave
-		Timestamp:  time.Now(),
-		Signature:  []byte("signature"),
-		Type:       types.VoteTypeApprove,
+	validVote := &consensus.Vote{
+		BlockHash:  "validblock",
+		Round:     1,
+		Sender:    "validator1",
+		Timestamp: time.Now(),
 	}
-
-	// Submit invalid vote
-	err = engine.SubmitVote(invalidVote)
-	assert.NoError(t, err)
-
-	// Wait to ensure no block is produced
-	select {
-	case <-engine.GetBlockChannel():
-		t.Fatal("Received block for invalid proposal/vote")
-	case <-time.After(2 * time.Second):
-		// Expected timeout
-	}
-
-	// Stop engine
-	err = engine.Stop()
+	err = engine.HandleVote(validVote)
 	assert.NoError(t, err)
 }
 
 func TestConsensusEngineQuorum(t *testing.T) {
-	// Create config
-	config := &consensus.Config{
-		RoundDuration:  1 * time.Second,
-		WaveTimeout:    5 * time.Second,
-		MaxValidators:  100,
-		MinValidators:  4,
-		QuorumSize:     3,
-		LeaderRotation: true,
+	config := consensus.Config{
+		TotalValidators: 4,
+		FaultTolerance: 1,
+		RoundDuration: time.Second,
+		WaveTimeout:   5 * time.Second,
 	}
 
-	// Create engine
 	engine := consensus.NewEngine(config)
 
-	// Start engine
-	err := engine.Start()
-	assert.NoError(t, err)
-
-	// Create proposal
-	proposal := &types.Proposal{
-		ID:        []byte("proposal1"),
+	proposal := &consensus.Proposal{
+		BlockHash:  "block1",
 		Round:     1,
-		Wave:      1,
-		Proposer:  []byte("proposer1"),
+		Sender:    "proposer1",
 		Timestamp: time.Now(),
-		Status:    types.ProposalStatusPending,
-		Block: types.Block{
-			Header: types.BlockHeader{
-				Version:        1,
-				Round:          1,
-				Wave:           1,
-				Height:         1,
-				ParentHash:     []byte("parent"),
-				StateRoot:      []byte("state"),
-				TransactionRoot: []byte("transactions"),
-				ReceiptRoot:    []byte("receipts"),
-				Validator:      []byte("validator"),
-			},
-			Body: types.BlockBody{
-				Transactions: []types.Transaction{},
-				Receipts:     []types.Receipt{},
-				Events:       []types.Event{},
-			},
-		},
 	}
-
-	// Submit proposal
-	err = engine.SubmitProposal(proposal)
+	err := engine.HandleProposal(proposal)
 	assert.NoError(t, err)
 
-	// Create insufficient votes
-	votes := make([]*types.Vote, 2) // Only 2 votes, need 3 for quorum
-	for i := 0; i < 2; i++ {
-		votes[i] = &types.Vote{
-			ProposalID: []byte("proposal1"),
-			Validator:  []byte("validator"),
-			Round:      1,
-			Wave:       1,
-			Timestamp:  time.Now(),
-			Signature:  []byte("signature"),
-			Type:       types.VoteTypeApprove,
+	// Add votes one by one and check quorum
+	validators := []string{"validator1", "validator2", "validator3", "validator4"}
+	for i, validator := range validators {
+		vote := &consensus.Vote{
+			BlockHash:  proposal.BlockHash,
+			Round:     1,
+			Sender:    validator,
+			Timestamp: time.Now(),
+		}
+		err = engine.HandleVote(vote)
+		assert.NoError(t, err)
+
+		// Check if quorum is reached (should be reached after 3 votes)
+		hasQuorum := engine.HasQuorum(proposal.BlockHash, 1)
+		if i < 2 {
+			assert.False(t, hasQuorum, "Quorum should not be reached with %d votes", i+1)
+		} else {
+			assert.True(t, hasQuorum, "Quorum should be reached with %d votes", i+1)
 		}
 	}
-
-	// Submit insufficient votes
-	for _, vote := range votes {
-		err = engine.SubmitVote(vote)
-		assert.NoError(t, err)
-	}
-
-	// Wait to ensure no block is produced
-	select {
-	case <-engine.GetBlockChannel():
-		t.Fatal("Received block without quorum")
-	case <-time.After(2 * time.Second):
-		// Expected timeout
-	}
-
-	// Stop engine
-	err = engine.Stop()
-	assert.NoError(t, err)
 } 

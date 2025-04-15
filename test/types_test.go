@@ -4,9 +4,42 @@ import (
 	"testing"
 	"time"
 
-	"BlazeDAG/internal/types"
+	"github.com/samuel0642/BlazeDAG/internal/types"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestTypes(t *testing.T) {
+	// Test Block
+	block := &types.Block{
+		Header: types.BlockHeader{
+			Version:    1,
+			Round:      1,
+			Wave:       1,
+			Height:     1,
+			ParentHash: []byte("parent"),
+		},
+		References: []types.Reference{},
+	}
+	assert.NotNil(t, block)
+
+	// Test Transaction
+	tx := &types.Transaction{
+		From:     []byte("sender"),
+		To:       []byte("recipient"),
+		Value:    100,
+		GasLimit: 21000,
+		GasPrice: 1,
+		Nonce:    0,
+	}
+	assert.NotNil(t, tx)
+
+	// Test Account
+	account := &types.Account{
+		Balance: 1000,
+		Nonce:   0,
+	}
+	assert.NotNil(t, account)
+}
 
 func TestBlock(t *testing.T) {
 	block := types.Block{
@@ -140,4 +173,20 @@ func TestNetworkMessage(t *testing.T) {
 	assert.Equal(t, []byte("recipient"), msg.Recipient)
 	assert.Equal(t, uint8(1), msg.Priority)
 	assert.Equal(t, uint64(1000), msg.TTL)
+}
+
+func TestBlockHash(t *testing.T) {
+	block := &types.Block{
+		Header: types.BlockHeader{
+			Version:    0,
+			Round:      1,
+			Wave:       0,
+			Height:     1,
+			ParentHash: []byte("parent"),
+		},
+		References: []types.Reference{},
+	}
+
+	hash := block.Hash()
+	assert.NotEmpty(t, hash)
 } 

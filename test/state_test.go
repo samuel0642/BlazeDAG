@@ -3,65 +3,178 @@ package test
 import (
 	"testing"
 
-	"BlazeDAG/internal/state"
-	"BlazeDAG/internal/types"
+	"github.com/samuel0642/BlazeDAG/internal/state"
+	"github.com/samuel0642/BlazeDAG/internal/types"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestStateManagement(t *testing.T) {
+func TestStateManager(t *testing.T) {
 	// Create state manager
 	sm := state.NewStateManager()
+	assert.NotNil(t, sm)
 
-	// Test account creation
-	account := &types.Account{
-		Address: []byte("test-address"),
+	// Create test accounts
+	account1 := &types.Account{
+		Address: []byte("account1"),
+		Balance: 100,
+		Nonce:   0,
+	}
+
+	account2 := &types.Account{
+		Address: []byte("account2"),
+		Balance: 200,
+		Nonce:   0,
+	}
+
+	// Create accounts
+	err := sm.CreateAccount(account1)
+	assert.NoError(t, err)
+
+	err = sm.CreateAccount(account2)
+	assert.NoError(t, err)
+
+	// Get accounts
+	acc1, err := sm.GetAccount(account1.Address)
+	assert.NoError(t, err)
+	assert.Equal(t, account1.Balance, acc1.Balance)
+	assert.Equal(t, account1.Nonce, acc1.Nonce)
+
+	acc2, err := sm.GetAccount(account2.Address)
+	assert.NoError(t, err)
+	assert.Equal(t, account2.Balance, acc2.Balance)
+	assert.Equal(t, account2.Nonce, acc2.Nonce)
+
+	// Update balances
+	err = sm.UpdateBalance(account1.Address, 150)
+	assert.NoError(t, err)
+
+	err = sm.UpdateBalance(account2.Address, 250)
+	assert.NoError(t, err)
+
+	// Verify updated balances
+	acc1, err = sm.GetAccount(account1.Address)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(150), acc1.Balance)
+
+	acc2, err = sm.GetAccount(account2.Address)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(250), acc2.Balance)
+
+	// Update nonces
+	err = sm.UpdateNonce(account1.Address, 1)
+	assert.NoError(t, err)
+
+	err = sm.UpdateNonce(account2.Address, 1)
+	assert.NoError(t, err)
+
+	// Verify updated nonces
+	acc1, err = sm.GetAccount(account1.Address)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), acc1.Nonce)
+
+	acc2, err = sm.GetAccount(account2.Address)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), acc2.Nonce)
+
+	// Test storage
+	err = sm.SetStorage(account1.Address, []byte("key1"), []byte("value1"))
+	assert.NoError(t, err)
+
+	value, err := sm.GetStorage(account1.Address, []byte("key1"))
+	assert.NoError(t, err)
+	assert.Equal(t, []byte("value1"), value)
+
+	// Test code
+	err = sm.SetCode(account1.Address, []byte("code1"))
+	assert.NoError(t, err)
+
+	code, err := sm.GetCode(account1.Address)
+	assert.NoError(t, err)
+	assert.Equal(t, []byte("code1"), code)
+
+	// Test state proof
+	proof, err := sm.GenerateProof(account1.Address)
+	assert.NoError(t, err)
+	assert.NotNil(t, proof)
+
+	valid, err := sm.VerifyProof(proof)
+	assert.NoError(t, err)
+	assert.True(t, valid)
+
+	// Test batch operations
+	updates := []types.BalanceUpdate{
+		{
+			Address: []byte("account3"),
+			Balance: 300,
+		},
+		{
+			Address: []byte("account4"),
+			Balance: 400,
+		},
+	}
+
+	err = sm.BatchCreateAccounts(updates)
+	assert.NoError(t, err)
+
+	acc3, err := sm.GetAccount([]byte("account3"))
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(300), acc3.Balance)
+
+	acc4, err := sm.GetAccount([]byte("account4"))
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(400), acc4.Balance)
+}
+
+func TestStateTransactions(t *testing.T) {
+	s := state.NewState()
+
+	// Create initial accounts
+	sender := &types.Account{
+		Address: []byte("sender"),
 		Balance: 1000,
 		Nonce:   0,
 	}
 
-	err := sm.CreateAccount(account)
+	recipient := &types.Account{
+		Address: []byte("recipient"),
+		Balance: 0,
+		Nonce:   0,
+	}
+
+	err := s.SetAccount(sender.Address, sender)
 	assert.NoError(t, err)
 
-	// Test account retrieval
-	retrieved, err := sm.GetAccount(account.Address)
-	assert.NoError(t, err)
-	assert.Equal(t, account, retrieved)
-
-	// Test balance update
-	err = sm.UpdateBalance(account.Address, 2000)
+	err = s.SetAccount(recipient.Address, recipient)
 	assert.NoError(t, err)
 
-	updated, err := sm.GetAccount(account.Address)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(2000), updated.Balance)
+	// Create and validate transaction
+	tx := &types.Transaction{
+		From:  sender.Address,
+		To:    recipient.Address,
+		Value: 500,
+		Nonce: 0,
+	}
 
-	// Test nonce update
-	err = sm.UpdateNonce(account.Address, 1)
-	assert.NoError(t, err)
+	// Update balances
+	sender.Balance -= tx.Value
+	recipient.Balance += tx.Value
+	sender.Nonce++
 
-	updated, err = sm.GetAccount(account.Address)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(1), updated.Nonce)
-
-	// Test storage
-	key := []byte("test-key")
-	value := []byte("test-value")
-
-	err = sm.SetStorage(account.Address, key, value)
+	err = s.UpdateAccount(sender.Address, sender)
 	assert.NoError(t, err)
 
-	retrievedValue, err := sm.GetStorage(account.Address, key)
-	assert.NoError(t, err)
-	assert.Equal(t, value, retrievedValue)
-
-	// Test code
-	code := []byte("test-code")
-	err = sm.SetCode(account.Address, code)
+	err = s.UpdateAccount(recipient.Address, recipient)
 	assert.NoError(t, err)
 
-	retrievedCode, err := sm.GetCode(account.Address)
-	assert.NoError(t, err)
-	assert.Equal(t, code, retrievedCode)
+	// Verify state changes
+	updatedSender, exists := s.GetAccount(sender.Address)
+	assert.True(t, exists)
+	assert.Equal(t, uint64(500), updatedSender.Balance)
+	assert.Equal(t, uint64(1), updatedSender.Nonce)
+
+	updatedRecipient, exists := s.GetAccount(recipient.Address)
+	assert.True(t, exists)
+	assert.Equal(t, uint64(500), updatedRecipient.Balance)
 }
 
 func TestStateTransitions(t *testing.T) {

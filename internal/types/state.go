@@ -1,26 +1,33 @@
 package types
 
-// State represents the system state
+// StateProof represents a state proof
+type StateProof struct {
+	Address string
+	Key     string
+	Value   []byte
+	Proof   [][]byte
+	Root    string
+}
+
+// State represents the global state
 type State struct {
-	Accounts map[string]Account
+	Accounts map[string]*Account
 	Storage  map[string]map[string][]byte
 	Code     map[string][]byte
 	Nonce    map[string]uint64
-	Balance  map[string][]byte
+	Balance  map[string]uint64
 }
 
 // StateChange represents a state change
 type StateChange struct {
-	Address    []byte
-	Type       StateChangeType
-	OldValue   []byte
-	NewValue   []byte
-	BlockHash  []byte
-	CausalOrder uint64
+	Type      StateChangeType
+	OldValue  []byte
+	NewValue  []byte
+	BlockHash string
 }
 
 // StateChangeType represents the type of state change
-type StateChangeType uint8
+type StateChangeType int
 
 const (
 	StateChangeTypeAccount StateChangeType = iota
@@ -30,18 +37,28 @@ const (
 	StateChangeTypeNonce
 )
 
-// StateProof represents a state proof
-type StateProof struct {
-	Key   []byte
-	Value []byte
-	Proof [][]byte
-	Root  []byte
+// NewState creates a new state
+func NewState() *State {
+	return &State{
+		Accounts: make(map[string]*Account),
+	}
+}
+
+// GetAccount retrieves an account by its address
+func (s *State) GetAccount(address []byte) (*Account, bool) {
+	account, exists := s.Accounts[string(address)]
+	return account, exists
+}
+
+// SetAccount sets an account in the state
+func (s *State) SetAccount(address []byte, account *Account) {
+	s.Accounts[string(address)] = account
 }
 
 // StateTransition represents a state transition
 type StateTransition struct {
-	PreState     State
-	PostState    State
+	PreState     *State
+	PostState    *State
 	Transactions []Transaction
 	Receipts     []Receipt
 	Events       []Event

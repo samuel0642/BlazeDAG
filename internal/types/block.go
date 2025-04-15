@@ -1,6 +1,8 @@
 package types
 
 import (
+	"crypto/sha256"
+	"encoding/json"
 	"time"
 )
 
@@ -12,6 +14,13 @@ type Block struct {
 	References   []Reference
 	Signature    []byte
 	Timestamp    time.Time
+}
+
+// Hash returns the SHA-256 hash of the block
+func (b *Block) Hash() []byte {
+	data, _ := json.Marshal(b)
+	hash := sha256.Sum256(data)
+	return hash[:]
 }
 
 // BlockHeader contains the block's metadata
