@@ -2,8 +2,14 @@ package types
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"time"
+)
+
+var (
+	ErrBlockNotFound = errors.New("block not found")
 )
 
 // Block represents a block in the DAG
@@ -14,13 +20,17 @@ type Block struct {
 	References   []Reference
 	Signature    []byte
 	Timestamp    time.Time
+	hash         []byte // cached hash
 }
 
 // Hash returns the SHA-256 hash of the block
-func (b *Block) Hash() []byte {
-	data, _ := json.Marshal(b)
-	hash := sha256.Sum256(data)
-	return hash[:]
+func (b *Block) Hash() string {
+	if b.hash == nil {
+		data, _ := json.Marshal(b)
+		hash := sha256.Sum256(data)
+		b.hash = hash[:]
+	}
+	return hex.EncodeToString(b.hash)
 }
 
 // BlockHeader contains the block's metadata
@@ -45,7 +55,7 @@ type BlockBody struct {
 
 // Reference represents a reference to another block
 type Reference struct {
-	BlockHash []byte
+	BlockHash string
 	Round     uint64
 	Wave      uint64
 	Type      ReferenceType

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/samuel0642/BlazeDAG/internal/consensus"
-	"github.com/samuel0642/BlazeDAG/internal/types"
+	"github.com/CrossDAG/BlazeDAG/internal/consensus"
+	"github.com/CrossDAG/BlazeDAG/internal/types"
 	"github.com/stretchr/testify/assert"
 )
 

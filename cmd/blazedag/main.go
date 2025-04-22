@@ -7,91 +7,92 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
-	"github.com/samuel0642/BlazeDAG/internal/consensus"
-	"github.com/samuel0642/BlazeDAG/internal/dag"
-	"github.com/samuel0642/BlazeDAG/internal/evm"
-	"github.com/samuel0642/BlazeDAG/internal/network"
-	"github.com/samuel0642/BlazeDAG/internal/state"
-)
-
-var (
-	port        = flag.Int("port", 9000, "P2P port")
-	validator   = flag.Bool("validator", false, "Run as validator")
-	genesisFile = flag.String("genesis", "genesis.json", "Genesis file path")
+	"github.com/CrossDAG/BlazeDAG/internal/consensus"
+	"github.com/CrossDAG/BlazeDAG/internal/core"
+	"github.com/CrossDAG/BlazeDAG/internal/network"
+	"github.com/CrossDAG/BlazeDAG/internal/state"
+	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
 func main() {
+	// Parse command line flags
+	port := flag.Int("port", 3000, "Port to listen on")
+	isValidator := flag.Bool("validator", false, "Whether this node is a validator")
 	flag.Parse()
 
 	// Create P2P node
-	node, err := network.NewP2PNode(*port)
-	if err != nil {
-		log.Fatalf("Failed to create P2P node: %v", err)
+	nodeID := network.PeerID(fmt.Sprintf("node-%d", *port))
+	node := network.NewP2PNode(nodeID)
+	if err := node.Start(); err != nil {
+		log.Fatalf("Failed to start P2P node: %v", err)
 	}
-
-	// Create DAG
-	dag := dag.NewDAG()
-
-	// Create state
-	state := state.NewState()
-
-	// Create EVM executor
-	executor := evm.NewEVMExecutor(state, big.NewInt(1))
-
-	// Create consensus engine
-	config := consensus.Config{
-		TotalValidators: 10,
-		FaultTolerance:  3,
-		RoundDuration:   time.Second * 2,
-		WaveTimeout:     time.Second * 10,
-	}
-	engine := consensus.NewEngine(config)
-
-	// Create wave controller
-	waveController := dag.NewWaveController(dag, time.Second*10)
 
 	// Create message handler
-	messageHandler := network.NewMessageHandler(node)
+	msgHandler := network.NewMessageHandler(node)
+
+	// Create DAG
+	dag := core.NewDAG()
+	
+	// Create state manager
+	stateManager := state.NewStateManager()
+	
+	// Create EVM executor
+	executor := core.NewEVMExecutor(stateManager)
+
+	// Create consensus engine
+	consensusEngine := consensus.NewConsensusEngine(dag, stateManager, executor, *isValidator)
+
+	// Create wave controller
+	// waveController := consensus.NewWaveController(consensusEngine)
 
 	// Register message handlers
-	messageHandler.RegisterHandler(network.MessageTypeBlock, handleBlock)
-	messageHandler.RegisterHandler(network.MessageTypeVote, handleVote)
-	messageHandler.RegisterHandler(network.MessageTypeCertificate, handleCertificate)
+	msgHandler.RegisterHandler(network.MessageTypeBlock, func(msg *network.Message) error {
+		block := &types.Block{}
+		if err := msg.UnmarshalPayload(block); err != nil {
+			return fmt.Errorf("failed to unmarshal block: %v", err)
+		}
+		return consensusEngine.HandleBlock(block)
+	})
+
+	msgHandler.RegisterHandler(network.MessageTypeVote, func(msg *network.Message) error {
+		vote := &consensus.Vote{}
+		if err := msg.UnmarshalPayload(vote); err != nil {
+			return fmt.Errorf("failed to unmarshal vote: %v", err)
+		}
+		return consensusEngine.HandleVote(vote)
+	})
+
+	msgHandler.RegisterHandler(network.MessageTypeCertificate, func(msg *network.Message) error {
+		cert := &types.Certificate{}
+		if err := msg.UnmarshalPayload(cert); err != nil {
+			return fmt.Errorf("failed to unmarshal certificate: %v", err)
+		}
+		return consensusEngine.HandleCertificate(cert)
+	})
 
 	// Start message handler
-	messageHandler.Start()
+	if err := msgHandler.Start(); err != nil {
+		log.Fatalf("Failed to start message handler: %v", err)
+	}
 
-	// Start peer discovery
-	go node.discoverPeers()
+	// Start consensus engine
+	if err := consensusEngine.Start(); err != nil {
+		log.Fatalf("Failed to start consensus engine: %v", err)
+	}
 
-	// Handle shutdown
+	log.Printf("BlazeDAG node started on port %d (Validator: %v)", *port, *isValidator)
+	log.Printf("Node ID: %s", nodeID)
+
+	// Wait for interrupt signal
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-
-	fmt.Printf("BlazeDAG node started on port %d\n", *port)
-	fmt.Printf("Running as validator: %v\n", *validator)
-
 	<-sigCh
-	fmt.Println("Shutting down...")
 
 	// Cleanup
-	messageHandler.Stop()
-	node.Close()
-}
-
-func handleBlock(msg *network.Message) error {
-	// Handle block message
-	return nil
-}
-
-func handleVote(msg *network.Message) error {
-	// Handle vote message
-	return nil
-}
-
-func handleCertificate(msg *network.Message) error {
-	// Handle certificate message
-	return nil
+	log.Println("Shutting down...")
+	consensusEngine.Stop()
+	msgHandler.Stop()
+	node.Stop()
+	log.Println("Node stopped")
 } 

@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"sync"
+
+	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
 // StateTransition represents a state transition
@@ -16,10 +18,11 @@ type StateTransition struct {
 
 // StateChange represents a change to the state
 type StateChange struct {
-	Address string
-	Type    StateChangeType
-	OldValue interface{}
-	NewValue interface{}
+	Address    string
+	Type       StateChangeType
+	OldValue   interface{}
+	NewValue   interface{}
+	StorageKey string
 }
 
 // StateChangeType represents the type of state change
@@ -75,15 +78,27 @@ func (stm *StateTransitionManager) CreateTransition(preState *State, changes []*
 func (stm *StateTransitionManager) applyChange(state *State, change *StateChange) {
 	switch change.Type {
 	case StateChangeTypeAccount:
-		state.SetAccount(change.Address, change.NewValue.(*Account))
+		account := &types.Account{
+			Address: []byte(change.Address),
+			Balance: change.NewValue.(uint64),
+		}
+		state.SetAccount(change.Address, account)
 	case StateChangeTypeStorage:
-		state.SetStorage(change.Address, change.NewValue.(map[string][]byte))
+		state.SetStorage([]byte(change.Address), []byte(change.StorageKey), change.NewValue.([]byte))
 	case StateChangeTypeCode:
-		state.SetCode(change.Address, change.NewValue.([]byte))
+		state.SetCode([]byte(change.Address), change.NewValue.([]byte))
 	case StateChangeTypeBalance:
-		state.SetBalance(change.Address, change.NewValue.(uint64))
+		account, _ := state.GetAccount(change.Address)
+		if account != nil {
+			account.Balance = change.NewValue.(uint64)
+			state.SetAccount(change.Address, account)
+		}
 	case StateChangeTypeNonce:
-		state.SetNonce(change.Address, change.NewValue.(uint64))
+		account, _ := state.GetAccount(change.Address)
+		if account != nil {
+			account.Nonce = change.NewValue.(uint64)
+			state.SetAccount(change.Address, account)
+		}
 	}
 }
 
@@ -93,21 +108,11 @@ func (stm *StateTransitionManager) calculateStateRoot(state *State) []byte {
 	h := sha256.New()
 
 	// Hash accounts
-	for addr, account := range state.Accounts {
+	for addr, account := range state.accounts {
 		h.Write([]byte(addr))
-		h.Write(account.Balance.Bytes())
+		binary.Write(h, binary.LittleEndian, account.Balance)
 		binary.Write(h, binary.LittleEndian, account.Nonce)
-		h.Write(account.CodeHash)
-		h.Write(account.StorageRoot)
-	}
-
-	// Hash storage
-	for addr, storage := range state.Storage {
-		h.Write([]byte(addr))
-		for key, value := range storage {
-			h.Write([]byte(key))
-			h.Write(value)
-		}
+		h.Write(account.Code)
 	}
 
 	return h.Sum(nil)
@@ -158,34 +163,36 @@ func (stm *StateTransitionManager) VerifyTransition(transition *StateTransition)
 func (stm *StateTransitionManager) verifyChange(state *State, change *StateChange) bool {
 	switch change.Type {
 	case StateChangeTypeAccount:
-		account := state.GetAccount(change.Address)
-		return account.Equal(change.NewValue.(*Account))
+		account, err := state.GetAccount(change.Address)
+		if err != nil {
+			return false
+		}
+		return account.Balance == change.NewValue.(uint64)
 	case StateChangeTypeStorage:
-		storage := state.GetStorage(change.Address)
-		return stm.verifyStorage(storage, change.NewValue.(map[string][]byte))
+		value, err := state.GetStorage([]byte(change.Address), []byte(change.StorageKey))
+		if err != nil {
+			return false
+		}
+		return string(value) == string(change.NewValue.([]byte))
 	case StateChangeTypeCode:
-		code := state.GetCode(change.Address)
+		code, err := state.GetCode([]byte(change.Address))
+		if err != nil {
+			return false
+		}
 		return string(code) == string(change.NewValue.([]byte))
 	case StateChangeTypeBalance:
-		balance := state.GetBalance(change.Address)
-		return balance == change.NewValue.(uint64)
+		account, err := state.GetAccount(change.Address)
+		if err != nil {
+			return false
+		}
+		return account.Balance == change.NewValue.(uint64)
 	case StateChangeTypeNonce:
-		nonce := state.GetNonce(change.Address)
-		return nonce == change.NewValue.(uint64)
+		account, err := state.GetAccount(change.Address)
+		if err != nil {
+			return false
+		}
+		return account.Nonce == change.NewValue.(uint64)
 	default:
 		return false
 	}
-}
-
-// verifyStorage verifies storage changes
-func (stm *StateTransitionManager) verifyStorage(actual, expected map[string][]byte) bool {
-	if len(actual) != len(expected) {
-		return false
-	}
-	for key, value := range expected {
-		if actualValue, exists := actual[key]; !exists || string(actualValue) != string(value) {
-			return false
-		}
-	}
-	return true
 } 

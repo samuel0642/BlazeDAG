@@ -2,8 +2,13 @@ package evm
 
 import (
 	"crypto/sha256"
-	"encoding/binary"
+	"errors"
 	"sync"
+)
+
+// Errors
+var (
+	ErrAccountNotFound = errors.New("account not found")
 )
 
 // StorageManager handles storage management
@@ -196,4 +201,66 @@ func (sm *StorageManager) ClearStorage(address string) error {
 
 	sm.storage[address] = make(map[string][]byte)
 	return nil
+}
+
+// Storage represents the storage of an account
+type Storage struct {
+	values map[string][]byte
+}
+
+// NewStorage creates a new storage
+func NewStorage() *Storage {
+	return &Storage{
+		values: make(map[string][]byte),
+	}
+}
+
+// Get gets a value from storage
+func (s *Storage) Get(key string) ([]byte, error) {
+	value, exists := s.values[key]
+	if !exists {
+		return nil, ErrAccountNotFound
+	}
+	return value, nil
+}
+
+// Set sets a value in storage
+func (s *Storage) Set(key string, value []byte) error {
+	s.values[key] = value
+	return nil
+}
+
+// Delete deletes a value from storage
+func (s *Storage) Delete(key string) error {
+	delete(s.values, key)
+	return nil
+}
+
+// Has checks if a key exists in storage
+func (s *Storage) Has(key string) bool {
+	_, exists := s.values[key]
+	return exists
+}
+
+// Clear clears all values from storage
+func (s *Storage) Clear() {
+	s.values = make(map[string][]byte)
+}
+
+// GetKeys returns all keys in storage
+func (s *Storage) GetKeys() []string {
+	keys := make([]string, 0, len(s.values))
+	for key := range s.values {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+// GetValues returns all values in storage
+func (s *Storage) GetValues() [][]byte {
+	values := make([][]byte, 0, len(s.values))
+	for _, value := range s.values {
+		values = append(values, value)
+	}
+	return values
 } 

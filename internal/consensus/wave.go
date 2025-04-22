@@ -112,4 +112,56 @@ func (wm *WaveManager) GetWaveProgress() float64 {
 	elapsed := time.Since(wm.currentWave.StartTime)
 	total := wm.currentWave.EndTime.Sub(wm.currentWave.StartTime)
 	return float64(elapsed) / float64(total)
+}
+
+// WaveController manages wave progression
+type WaveController struct {
+	engine  *ConsensusEngine
+	running bool
+	mu      sync.RWMutex
+}
+
+// NewWaveController creates a new wave controller
+func NewWaveController(engine *ConsensusEngine) *WaveController {
+	return &WaveController{
+		engine: engine,
+	}
+}
+
+// Start starts the wave controller
+func (wc *WaveController) Start() error {
+	wc.mu.Lock()
+	defer wc.mu.Unlock()
+
+	if wc.running {
+		return nil
+	}
+
+	wc.running = true
+	return nil
+}
+
+// Stop stops the wave controller
+func (wc *WaveController) Stop() error {
+	wc.mu.Lock()
+	defer wc.mu.Unlock()
+
+	if !wc.running {
+		return nil
+	}
+
+	wc.running = false
+	return nil
+}
+
+// HandleWaveEnd handles the end of a wave
+func (wc *WaveController) HandleWaveEnd(wave uint64) error {
+	// TODO: Implement wave end handling
+	return nil
+}
+
+// PrepareNextWave prepares for the next wave
+func (wc *WaveController) PrepareNextWave(wave uint64) error {
+	// TODO: Implement next wave preparation
+	return nil
 } 

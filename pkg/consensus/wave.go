@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/samuel0642/BlazeDAG/internal/types"
+	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
 // WaveState represents the current state of a consensus wave

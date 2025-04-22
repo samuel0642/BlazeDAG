@@ -4,7 +4,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/samuel0642/BlazeDAG/internal/types"
+	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
 var (
@@ -180,6 +180,33 @@ func (s *State) VerifyProof(proof *types.StateProof) (bool, error) {
 	return false, nil
 }
 
+// Copy creates a deep copy of the state
+func (s *State) Copy() *State {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	newState := NewState()
+	
+	// Copy accounts
+	for addr, account := range s.accounts {
+		newState.accounts[addr] = &types.Account{
+			Address: account.Address,
+			Balance: account.Balance,
+			Nonce:   account.Nonce,
+		}
+	}
+
+	// Copy storage
+	for addr, storage := range s.storage {
+		newState.storage[addr] = make(map[string][]byte)
+		for key, value := range storage {
+			newState.storage[addr][key] = value
+		}
+	}
+
+	return newState
+}
+
 // StateManager manages the blockchain state
 type StateManager struct {
 	state *State
@@ -299,13 +326,74 @@ func (sm *StateManager) SetCode(address, code []byte) error {
 }
 
 // GetCode retrieves the code for an account
-func (sm *StateManager) GetCode(address []byte) ([]byte, error) {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
+func (s *State) GetCode(address []byte) ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	account, err := sm.state.GetAccount(string(address))
-	if err != nil {
-		return nil, err
+	addr := string(address)
+	if _, exists := s.accounts[addr]; !exists {
+		return nil, ErrAccountNotFound
 	}
-	return account.Code, nil
+
+	// TODO: Implement code storage and retrieval
+	return nil, nil
+}
+
+// SetCode sets the code for an account
+func (s *State) SetCode(address, code []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	addr := string(address)
+	if _, exists := s.accounts[addr]; !exists {
+		return ErrAccountNotFound
+	}
+
+	// TODO: Implement code storage
+	return nil
+}
+
+// Equal checks if two states are equal
+func (s *State) Equal(other *State) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Check accounts
+	if len(s.accounts) != len(other.accounts) {
+		return false
+	}
+	for addr, account := range s.accounts {
+		otherAccount, exists := other.accounts[addr]
+		if !exists {
+			return false
+		}
+		if account.Balance != otherAccount.Balance || account.Nonce != otherAccount.Nonce {
+			return false
+		}
+	}
+
+	// Check storage
+	if len(s.storage) != len(other.storage) {
+		return false
+	}
+	for addr, storage := range s.storage {
+		otherStorage, exists := other.storage[addr]
+		if !exists {
+			return false
+		}
+		if len(storage) != len(otherStorage) {
+			return false
+		}
+		for key, value := range storage {
+			otherValue, exists := otherStorage[key]
+			if !exists {
+				return false
+			}
+			if string(value) != string(otherValue) {
+				return false
+			}
+		}
+	}
+
+	return true
 }

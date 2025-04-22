@@ -1,22 +1,22 @@
 package state
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
-	"sync"
+
+	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
 var (
 	ErrInvalidStateRoot = errors.New("invalid state root")
-	ErrInvalidProof     = errors.New("invalid proof")
 	ErrInconsistentState = errors.New("inconsistent state")
 )
 
 // StateVerifier handles state verification
 type StateVerifier struct {
 	state *State
-	mu    sync.RWMutex
 }
 
 // NewStateVerifier creates a new state verifier
@@ -28,9 +28,6 @@ func NewStateVerifier(state *State) *StateVerifier {
 
 // VerifyStateRoot verifies the state root
 func (sv *StateVerifier) VerifyStateRoot(root []byte) error {
-	sv.mu.RLock()
-	defer sv.mu.RUnlock()
-
 	calculatedRoot := sv.calculateStateRoot()
 	if string(calculatedRoot) != string(root) {
 		return ErrInvalidStateRoot
@@ -39,14 +36,27 @@ func (sv *StateVerifier) VerifyStateRoot(root []byte) error {
 }
 
 // VerifyProof verifies a state proof
-func (sv *StateVerifier) VerifyProof(proof *StateProof) error {
-	sv.mu.RLock()
-	defer sv.mu.RUnlock()
+func (sv *StateVerifier) VerifyProof(proof *types.StateProof) error {
+	if proof == nil {
+		return types.ErrInvalidProof
+	}
 
-	// Verify each proof element
 	for _, element := range proof.Elements {
-		if !sv.verifyProofElement(element) {
-			return ErrInvalidProof
+		switch element.Type {
+		case types.ProofElementTypeAccount:
+			if err := sv.verifyAccountProof(element); err != nil {
+				return err
+			}
+		case types.ProofElementTypeStorage:
+			if err := sv.verifyStorageProof(element); err != nil {
+				return err
+			}
+		case types.ProofElementTypeCode:
+			if err := sv.verifyCodeProof(element); err != nil {
+				return err
+			}
+		default:
+			return types.ErrInvalidProof
 		}
 	}
 
@@ -55,11 +65,8 @@ func (sv *StateVerifier) VerifyProof(proof *StateProof) error {
 
 // VerifyConsistency verifies state consistency
 func (sv *StateVerifier) VerifyConsistency() error {
-	sv.mu.RLock()
-	defer sv.mu.RUnlock()
-
 	// Verify account consistency
-	for addr, account := range sv.state.Accounts {
+	for addr, account := range sv.state.accounts {
 		// Verify storage root
 		storageRoot := sv.calculateStorageRoot(addr)
 		if string(storageRoot) != string(account.StorageRoot) {
@@ -68,7 +75,7 @@ func (sv *StateVerifier) VerifyConsistency() error {
 
 		// Verify code hash
 		codeHash := sv.calculateCodeHash(addr)
-		if string(codeHash) != string(account.CodeHash) {
+		if !bytes.Equal(account.CodeHash, codeHash[:]) {
 			return ErrInconsistentState
 		}
 	}
@@ -81,16 +88,16 @@ func (sv *StateVerifier) calculateStateRoot() []byte {
 	h := sha256.New()
 
 	// Hash accounts
-	for addr, account := range sv.state.Accounts {
+	for addr, account := range sv.state.accounts {
 		h.Write([]byte(addr))
-		h.Write(account.Balance.Bytes())
+		binary.Write(h, binary.LittleEndian, account.Balance)
 		binary.Write(h, binary.LittleEndian, account.Nonce)
 		h.Write(account.CodeHash)
 		h.Write(account.StorageRoot)
 	}
 
 	// Hash storage
-	for addr, storage := range sv.state.Storage {
+	for addr, storage := range sv.state.storage {
 		h.Write([]byte(addr))
 		for key, value := range storage {
 			h.Write([]byte(key))
@@ -104,7 +111,7 @@ func (sv *StateVerifier) calculateStateRoot() []byte {
 // calculateStorageRoot calculates the storage root for an account
 func (sv *StateVerifier) calculateStorageRoot(addr string) []byte {
 	h := sha256.New()
-	storage := sv.state.Storage[addr]
+	storage := sv.state.storage[addr]
 
 	for key, value := range storage {
 		h.Write([]byte(key))
@@ -115,83 +122,67 @@ func (sv *StateVerifier) calculateStorageRoot(addr string) []byte {
 }
 
 // calculateCodeHash calculates the code hash for an account
-func (sv *StateVerifier) calculateCodeHash(addr string) []byte {
-	code := sv.state.Code[addr]
-	h := sha256.New()
-	h.Write(code)
-	return h.Sum(nil)
-}
-
-// verifyProofElement verifies a proof element
-func (sv *StateVerifier) verifyProofElement(element *ProofElement) bool {
-	switch element.Type {
-	case ProofElementTypeAccount:
-		return sv.verifyAccountProof(element)
-	case ProofElementTypeStorage:
-		return sv.verifyStorageProof(element)
-	case ProofElementTypeCode:
-		return sv.verifyCodeProof(element)
-	default:
-		return false
+func (sv *StateVerifier) calculateCodeHash(addr string) [32]byte {
+	code := sv.state.storage[addr]["code"]
+	if len(code) == 0 {
+		return [32]byte{}
 	}
+	return sha256.Sum256(code)
 }
 
 // verifyAccountProof verifies an account proof
-func (sv *StateVerifier) verifyAccountProof(element *ProofElement) bool {
-	account := sv.state.Accounts[element.Address]
-	if account == nil {
-		return false
+func (sv *StateVerifier) verifyAccountProof(element *types.ProofElement) error {
+	account, ok := element.Value.(*types.Account)
+	if !ok {
+		return types.ErrInvalidProof
 	}
 
-	// Verify account data matches proof
-	return account.Equal(element.Value.(*Account))
+	// Verify account data
+	stateAccount := sv.state.accounts[element.Address]
+	if account.Balance != stateAccount.Balance {
+		return types.ErrInvalidProof
+	}
+
+	if account.Nonce != stateAccount.Nonce {
+		return types.ErrInvalidProof
+	}
+
+	codeHash := sv.calculateCodeHash(element.Address)
+	if !bytes.Equal(account.CodeHash, codeHash[:]) {
+		return types.ErrInvalidProof
+	}
+
+	return nil
 }
 
 // verifyStorageProof verifies a storage proof
-func (sv *StateVerifier) verifyStorageProof(element *ProofElement) bool {
-	storage := sv.state.Storage[element.Address]
-	if storage == nil {
-		return false
+func (sv *StateVerifier) verifyStorageProof(element *types.ProofElement) error {
+	value, ok := element.Value.([]byte)
+	if !ok {
+		return types.ErrInvalidProof
 	}
 
-	// Verify storage value matches proof
-	value, exists := storage[element.Key]
-	if !exists {
-		return false
+	// Verify storage value
+	storageValue := sv.state.storage[element.Address][element.StorageKey]
+	if !bytes.Equal(value, storageValue) {
+		return types.ErrInvalidProof
 	}
 
-	return string(value) == string(element.Value.([]byte))
+	return nil
 }
 
 // verifyCodeProof verifies a code proof
-func (sv *StateVerifier) verifyCodeProof(element *ProofElement) bool {
-	code := sv.state.Code[element.Address]
-	if code == nil {
-		return false
+func (sv *StateVerifier) verifyCodeProof(element *types.ProofElement) error {
+	code, ok := element.Value.([]byte)
+	if !ok {
+		return types.ErrInvalidProof
 	}
 
-	// Verify code matches proof
-	return string(code) == string(element.Value.([]byte))
-}
+	// Verify code
+	stateCode := sv.state.storage[element.Address]["code"]
+	if !bytes.Equal(code, stateCode) {
+		return types.ErrInvalidProof
+	}
 
-// StateProof represents a state proof
-type StateProof struct {
-	Elements []*ProofElement
-}
-
-// ProofElement represents a proof element
-type ProofElement struct {
-	Type    ProofElementType
-	Address string
-	Key     string
-	Value   interface{}
-}
-
-// ProofElementType represents the type of proof element
-type ProofElementType int
-
-const (
-	ProofElementTypeAccount ProofElementType = iota
-	ProofElementTypeStorage
-	ProofElementTypeCode
-) 
+	return nil
+} 

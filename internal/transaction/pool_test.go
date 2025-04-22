@@ -3,8 +3,8 @@ package transaction
 import (
 	"testing"
 
-	"github.com/samuel0642/BlazeDAG/internal/state"
-	"github.com/samuel0642/BlazeDAG/internal/types"
+	"github.com/CrossDAG/BlazeDAG/internal/state"
+	"github.com/CrossDAG/BlazeDAG/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

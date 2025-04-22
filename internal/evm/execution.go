@@ -37,7 +37,8 @@ func (e *EVMExecutor) ExecuteTransaction(tx *Transaction) *ExecutionResult {
 	defer e.mu.Unlock()
 
 	// Check gas limit
-	if tx.GasLimit < tx.GasPrice {
+	gasCost := new(big.Int).Mul(e.gasPrice, big.NewInt(int64(tx.GasLimit)))
+	if gasCost.Cmp(big.NewInt(int64(tx.GasLimit))) > 0 {
 		return &ExecutionResult{
 			Success: false,
 			Error:   ErrInsufficientGas,

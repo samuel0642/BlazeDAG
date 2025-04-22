@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/samuel0642/BlazeDAG/internal/transaction"
-	"github.com/samuel0642/BlazeDAG/internal/types"
+	"github.com/CrossDAG/BlazeDAG/internal/transaction"
+	"github.com/CrossDAG/BlazeDAG/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
