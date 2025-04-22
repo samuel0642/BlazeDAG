@@ -98,4 +98,44 @@ func (d *DAG) GetLatestBlockHash() []byte {
 
 	hashStr := latestBlock.Hash()
 	return []byte(hashStr)
+}
+
+// GetBlockByHeight returns a block at a specific height
+func (d *DAG) GetBlockByHeight(height uint64) *types.Block {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	for _, block := range d.blocks {
+		if block.Header.Height == height {
+			return block
+		}
+	}
+	return nil
+}
+
+// GetRecentBlocks returns the most recent blocks
+func (d *DAG) GetRecentBlocks(count int) []*types.Block {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	// Get all blocks
+	blocks := make([]*types.Block, 0, len(d.blocks))
+	for _, block := range d.blocks {
+		blocks = append(blocks, block)
+	}
+
+	// Sort by height in descending order
+	for i := 0; i < len(blocks); i++ {
+		for j := i + 1; j < len(blocks); j++ {
+			if blocks[i].Header.Height < blocks[j].Header.Height {
+				blocks[i], blocks[j] = blocks[j], blocks[i]
+			}
+		}
+	}
+
+	// Return the most recent blocks
+	if count > len(blocks) {
+		count = len(blocks)
+	}
+	return blocks[:count]
 } 

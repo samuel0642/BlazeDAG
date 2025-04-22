@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 )
 
 // PeerID represents a unique identifier for a peer
@@ -18,7 +19,7 @@ type P2PNode struct {
 	cancel  context.CancelFunc
 	running bool
 	mu      sync.RWMutex
-	port    int
+	Port    int
 	server  net.Listener
 }
 
@@ -43,6 +44,19 @@ func (n *P2PNode) Start() error {
 		return nil
 	}
 
+	// Start listening for incoming connections
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", n.Port))
+	if err != nil {
+		return fmt.Errorf("failed to start listener: %v", err)
+	}
+	n.server = listener
+
+	// Start accepting connections
+	go n.acceptConnections()
+
+	// Start peer discovery
+	go n.discoverPeers()
+
 	n.running = true
 	return nil
 }
@@ -61,18 +75,27 @@ func (n *P2PNode) Stop() error {
 		conn.Close()
 	}
 
+	if n.server != nil {
+		n.server.Close()
+	}
+
 	n.cancel()
 	n.running = false
 	return nil
 }
 
 // Connect adds a peer to the node's peer list
-func (n *P2PNode) Connect(peerID PeerID) error {
+func (n *P2PNode) Connect(peerID PeerID, addr string) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	// For now, just store the peer ID
-	n.peers[peerID] = nil
+	// Connect to the peer
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("failed to connect to peer: %v", err)
+	}
+
+	n.peers[peerID] = conn
 	return nil
 }
 
@@ -104,12 +127,105 @@ func (n *P2PNode) GetActivePeers() []PeerID {
 
 // Broadcast sends a message to all connected peers
 func (n *P2PNode) Broadcast(msg []byte) error {
-	// For now, just log the broadcast
-	fmt.Printf("Broadcasting message to %d peers\n", len(n.peers))
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	for peerID, conn := range n.peers {
+		if _, err := conn.Write(msg); err != nil {
+			fmt.Printf("Failed to send message to peer %s: %v\n", peerID, err)
+			// Don't return error, continue with other peers
+		}
+	}
 	return nil
 }
 
 // GetID returns the node's ID
 func (n *P2PNode) GetID() PeerID {
 	return n.id
+}
+
+// acceptConnections accepts incoming connections
+func (n *P2PNode) acceptConnections() {
+	for {
+		select {
+		case <-n.ctx.Done():
+			return
+		default:
+			conn, err := n.server.Accept()
+			if err != nil {
+				if !n.running {
+					return
+				}
+				fmt.Printf("Failed to accept connection: %v\n", err)
+				continue
+			}
+
+			// Handle new connection
+			go n.handleConnection(conn)
+		}
+	}
+}
+
+// handleConnection handles a new connection
+func (n *P2PNode) handleConnection(conn net.Conn) {
+	defer conn.Close()
+
+	// Read peer ID from connection
+	buf := make([]byte, 1024)
+	bytesRead, err := conn.Read(buf)
+	if err != nil {
+		fmt.Printf("Failed to read peer ID: %v\n", err)
+		return
+	}
+
+	peerID := PeerID(string(buf[:bytesRead]))
+	n.mu.Lock()
+	n.peers[peerID] = conn
+	n.mu.Unlock()
+
+	// Keep connection alive
+	for {
+		select {
+		case <-n.ctx.Done():
+			return
+		default:
+			// Read messages
+			buf := make([]byte, 1024)
+			_, err := conn.Read(buf)
+			if err != nil {
+				n.Disconnect(peerID)
+				return
+			}
+		}
+	}
+}
+
+// discoverPeers periodically discovers new peers
+func (n *P2PNode) discoverPeers() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-n.ctx.Done():
+			return
+		case <-ticker.C:
+			// Try to connect to known peers
+			knownPeers := []struct {
+				ID   PeerID
+				Addr string
+			}{
+				{PeerID("node-3000"), "localhost:3000"},
+				{PeerID("node-3001"), "localhost:3001"},
+			}
+
+			for _, peer := range knownPeers {
+				if peer.ID != n.id {
+					if err := n.Connect(peer.ID, peer.Addr); err != nil {
+						fmt.Printf("Failed to connect to peer %s: %v\n", peer.ID, err)
+					}
+				}
+			}
+		}
+	}
 } 

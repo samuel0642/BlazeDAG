@@ -1,0 +1,206 @@
+2025/04/22 09:09:49 Starting BlazeDAG node on port 3000 (Validator: true)
+2025/04/22 09:09:49 P2P node started with ID: node-3000
+2025/04/22 09:09:49 Message handler started
+2025/04/22 09:09:49 DAG initialized
+2025/04/22 09:09:49 State manager initialized
+2025/04/22 09:09:49 EVM executor initialized
+2025/04/22 09:09:49 Consensus engine started
+2025/04/22 09:09:49 Wave controller started
+2025/04/22 09:09:49 Message handlers registered
+2025/04/22 09:12:42 Created new account: c97be34ac22487ea4bc4268aec50b4187adc3c9c with initial balance: 1000000
+2025/04/22 09:13:59 Created new account: 87d5a6209a138d057df870e95fd951cb44be38b0 with initial balance: 1000000
+2025/04/22 09:14:37 Updated existing recipient account 87d5a6209a138d057df870e95fd951cb44be38b0 balance: 1001000
+2025/04/22 09:14:37 Updated sender c97be34ac22487ea4bc4268aec50b4187adc3c9c nonce: 1
+2025/04/22 09:14:37 Transaction sent: 9f69898a1631f4771981d2e35681215f4165e7c1362bcf3097e2008fe46a06ce (From: c97be34ac22487ea4bc4268aec50b4187adc3c9c, To: 87d5a6209a138d057df870e95fd951cb44be38b0, Amount: 1000)
+2025/04/22 09:15:54 No pending transactions to create block
+2025/04/22 09:17:11 Starting BlazeDAG node on port 3001 (Validator: true)
+2025/04/22 09:17:11 Warning: Failed to load saved state: failed to unmarshal blocks: json: cannot unmarshal object into Go value of type []*types.Block
+2025/04/22 09:17:11 P2P node started with ID: node-3001
+2025/04/22 09:17:11 Message handler started
+2025/04/22 09:17:11 DAG initialized
+2025/04/22 09:17:11 State manager initialized
+2025/04/22 09:17:11 EVM executor initialized
+2025/04/22 09:17:11 Consensus engine started
+2025/04/22 09:17:11 Wave controller started
+2025/04/22 09:17:11 Message handlers registered
+2025/04/22 09:51:51 Shutting down node...
+2025/04/22 09:51:51 Wave controller stopped
+2025/04/22 09:51:51 Consensus engine stopped
+2025/04/22 09:51:51 Message handler stopped
+2025/04/22 09:51:51 P2P node stopped
+2025/04/22 09:51:51 Node shutdown complete
+2025/04/22 09:51:53 Starting BlazeDAG node on port 3000 (Validator: true)
+2025/04/22 09:51:53 Warning: Failed to load saved state: failed to unmarshal blocks: json: cannot unmarshal object into Go value of type []*types.Block
+2025/04/22 09:51:53 P2P node started with ID: node-3000
+2025/04/22 09:51:53 Message handler started
+2025/04/22 09:51:53 DAG initialized
+2025/04/22 09:51:53 State manager initialized
+2025/04/22 09:51:53 EVM executor initialized
+2025/04/22 09:51:53 Consensus engine started
+2025/04/22 09:51:53 Wave controller started
+2025/04/22 09:51:53 Message handlers registered
+2025/04/22 09:51:55 Shutting down node...
+2025/04/22 09:51:55 Wave controller stopped
+2025/04/22 09:51:55 Consensus engine stopped
+2025/04/22 09:51:55 Message handler stopped
+2025/04/22 09:51:55 P2P node stopped
+2025/04/22 09:51:55 Node shutdown complete
+2025/04/22 09:51:57 Starting BlazeDAG node on port 3001 (Validator: true)
+2025/04/22 09:51:57 Warning: Failed to load saved state: failed to unmarshal blocks: json: cannot unmarshal object into Go value of type []*types.Block
+2025/04/22 09:51:57 P2P node started with ID: node-3001
+2025/04/22 09:51:57 Message handler started
+2025/04/22 09:51:57 DAG initialized
+2025/04/22 09:51:57 State manager initialized
+2025/04/22 09:51:57 EVM executor initialized
+2025/04/22 09:51:57 Consensus engine started
+2025/04/22 09:51:57 Wave controller started
+2025/04/22 09:51:57 Message handlers registered
+2025/04/22 09:52:06 Shutting down node...
+2025/04/22 09:52:06 Wave controller stopped
+2025/04/22 09:52:06 Consensus engine stopped
+2025/04/22 09:52:06 Message handler stopped
+2025/04/22 09:52:06 P2P node stopped
+2025/04/22 09:52:06 Node shutdown complete
+2025/04/22 09:52:06 Shutting down node...
+2025/04/22 09:52:06 Wave controller stopped
+2025/04/22 09:52:06 Consensus engine stopped
+2025/04/22 09:52:06 Message handler stopped
+2025/04/22 09:52:06 P2P node stopped
+2025/04/22 09:52:06 Node shutdown complete
+2025/04/22 10:28:59 Starting BlazeDAG node on port 3000 (Validator: true)
+2025/04/22 10:28:59 Warning: Failed to load saved state: failed to unmarshal blocks: json: cannot unmarshal object into Go value of type []*types.Block
+2025/04/22 10:28:59 P2P node started with ID: node-3000
+2025/04/22 10:28:59 Message handler started
+2025/04/22 10:28:59 DAG initialized
+2025/04/22 10:28:59 State manager initialized
+2025/04/22 10:28:59 EVM executor initialized
+2025/04/22 10:28:59 Consensus engine started
+2025/04/22 10:28:59 Wave controller started
+2025/04/22 10:28:59 Message handlers registered
+2025/04/22 10:29:03 Starting BlazeDAG node on port 3001 (Validator: true)
+2025/04/22 10:29:03 Warning: Failed to load saved state: failed to unmarshal blocks: json: cannot unmarshal object into Go value of type []*types.Block
+2025/04/22 10:29:03 P2P node started with ID: node-3001
+2025/04/22 10:29:03 Message handler started
+2025/04/22 10:29:03 DAG initialized
+2025/04/22 10:29:03 State manager initialized
+2025/04/22 10:29:03 EVM executor initialized
+2025/04/22 10:29:03 Consensus engine started
+2025/04/22 10:29:03 Wave controller started
+2025/04/22 10:29:03 Message handlers registered
+2025/04/22 10:36:47 Created new account: a4f053b0106cc61f8ce53d93e84098f2479ef74f with initial balance: 1000000
+2025/04/22 10:36:49 Created new account: e15cc63499016bd1369d056ed53da60c74f056bd with initial balance: 1000000
+2025/04/22 10:36:50 Created new account: 76c53aa91887f562d077e857c936a61585f260d0 with initial balance: 1000000
+2025/04/22 10:36:52 Created new account: 97dc4ab41c81e94fb71f87f056be268bf159c229 with initial balance: 1000000
+2025/04/22 10:38:53 Updated existing recipient account a4f053b0106cc61f8ce53d93e84098f2479ef74f balance: 1001000
+2025/04/22 10:38:53 Updated sender c97be34ac22487ea4bc4268aec50b4187adc3c9c nonce: 2
+2025/04/22 10:38:53 Transaction sent: 4bcd40cbf5e23c40a125817094eddd8d9325886d4164226736269274439e57d6 (From: c97be34ac22487ea4bc4268aec50b4187adc3c9c, To: a4f053b0106cc61f8ce53d93e84098f2479ef74f, Amount: 1000)
+2025/04/22 10:40:22 No pending transactions to create block
+2025/04/22 10:43:45 Shutting down node...
+2025/04/22 10:43:45 Wave controller stopped
+2025/04/22 10:43:45 Consensus engine stopped
+2025/04/22 10:43:45 Message handler stopped
+2025/04/22 10:43:45 P2P node stopped
+2025/04/22 10:43:45 Node shutdown complete
+2025/04/22 10:45:59 Shutting down node...
+2025/04/22 10:45:59 Wave controller stopped
+2025/04/22 10:45:59 Consensus engine stopped
+2025/04/22 10:45:59 Message handler stopped
+2025/04/22 10:45:59 P2P node stopped
+2025/04/22 10:45:59 Node shutdown complete
+2025/04/22 10:46:43 Starting BlazeDAG node on port 3000 (Validator: true)
+2025/04/22 10:46:43 Warning: Failed to load saved state: failed to unmarshal blocks: json: cannot unmarshal object into Go value of type []*types.Block
+2025/04/22 10:46:43 P2P node started with ID: node-3000
+2025/04/22 10:46:43 Message handler started
+2025/04/22 10:46:43 DAG initialized
+2025/04/22 10:46:43 State manager initialized
+2025/04/22 10:46:43 EVM executor initialized
+2025/04/22 10:46:43 Consensus engine started
+2025/04/22 10:46:43 Wave controller started
+2025/04/22 10:46:43 Message handlers registered
+2025/04/22 10:46:46 Starting BlazeDAG node on port 3001 (Validator: true)
+2025/04/22 10:46:46 Warning: Failed to load saved state: failed to unmarshal blocks: json: cannot unmarshal object into Go value of type []*types.Block
+2025/04/22 10:46:46 P2P node started with ID: node-3001
+2025/04/22 10:46:46 Message handler started
+2025/04/22 10:46:46 DAG initialized
+2025/04/22 10:46:46 State manager initialized
+2025/04/22 10:46:46 EVM executor initialized
+2025/04/22 10:46:46 Consensus engine started
+2025/04/22 10:46:46 Wave controller started
+2025/04/22 10:46:46 Message handlers registered
+2025/04/22 10:47:28 Added transaction to mempool: bceb7e853373860d95547ad946fee85a07a7a41b7b569e0836199e1ea98c9e08
+2025/04/22 10:47:28 Updated existing recipient account 87d5a6209a138d057df870e95fd951cb44be38b0 balance: 1001100
+2025/04/22 10:47:28 Updated sender 76c53aa91887f562d077e857c936a61585f260d0 nonce: 1
+2025/04/22 10:47:28 Transaction sent: bceb7e853373860d95547ad946fee85a07a7a41b7b569e0836199e1ea98c9e08 (From: 76c53aa91887f562d077e857c936a61585f260d0, To: 87d5a6209a138d057df870e95fd951cb44be38b0, Amount: 100)
+2025/04/22 10:47:40 Cleared mempool after block creation
+2025/04/22 10:47:40 Block created and broadcast: a70460477afcd30ad1f8b5935056983984c7072bf0e514b7db10f782e6edfa20 (Height: 1, Wave: 0, Transactions: 1)
+2025/04/22 10:52:30 Shutting down node...
+2025/04/22 10:52:30 Wave controller stopped
+2025/04/22 10:52:30 Consensus engine stopped
+2025/04/22 10:52:30 Message handler stopped
+2025/04/22 10:52:30 P2P node stopped
+2025/04/22 10:52:30 Node shutdown complete
+2025/04/22 10:52:35 Shutting down node...
+2025/04/22 10:52:35 Wave controller stopped
+2025/04/22 10:52:35 Consensus engine stopped
+2025/04/22 10:52:35 Message handler stopped
+2025/04/22 10:52:35 P2P node stopped
+2025/04/22 10:52:35 Node shutdown complete
+2025/04/22 10:53:09 Starting BlazeDAG node on port 3000 (Validator: true)
+2025/04/22 10:53:09 Warning: Failed to load saved state: failed to unmarshal blocks: json: cannot unmarshal object into Go value of type []*types.Block
+2025/04/22 10:53:09 P2P node started with ID: node-3000
+2025/04/22 10:53:09 Message handler started
+2025/04/22 10:53:09 DAG initialized
+2025/04/22 10:53:09 State manager initialized
+2025/04/22 10:53:09 EVM executor initialized
+2025/04/22 10:53:09 Consensus engine started
+2025/04/22 10:53:09 Wave controller started
+2025/04/22 10:53:09 Message handlers registered
+2025/04/22 10:53:13 Starting BlazeDAG node on port 3001 (Validator: true)
+2025/04/22 10:53:13 Warning: Failed to load saved state: failed to unmarshal blocks: json: cannot unmarshal object into Go value of type []*types.Block
+2025/04/22 10:53:13 P2P node started with ID: node-3001
+2025/04/22 10:53:13 Message handler started
+2025/04/22 10:53:13 DAG initialized
+2025/04/22 10:53:13 State manager initialized
+2025/04/22 10:53:13 EVM executor initialized
+2025/04/22 10:53:13 Consensus engine started
+2025/04/22 10:53:13 Wave controller started
+2025/04/22 10:53:13 Message handlers registered
+2025/04/22 10:56:21 Shutting down node...
+2025/04/22 10:56:21 Wave controller stopped
+2025/04/22 10:56:21 Consensus engine stopped
+2025/04/22 10:56:21 Message handler stopped
+2025/04/22 10:56:21 P2P node stopped
+2025/04/22 10:56:21 Node shutdown complete
+2025/04/22 10:56:26 Shutting down node...
+2025/04/22 10:56:26 Wave controller stopped
+2025/04/22 10:56:26 Consensus engine stopped
+2025/04/22 10:56:26 Message handler stopped
+2025/04/22 10:56:26 P2P node stopped
+2025/04/22 10:56:26 Node shutdown complete
+2025/04/22 10:56:32 Starting BlazeDAG node on port 3000 (Validator: true)
+2025/04/22 10:56:32 Warning: Failed to load saved state: failed to unmarshal blocks: json: cannot unmarshal object into Go value of type []*types.Block
+2025/04/22 10:56:32 P2P node started with ID: node-3000
+2025/04/22 10:56:32 Message handler started
+2025/04/22 10:56:32 DAG initialized
+2025/04/22 10:56:32 State manager initialized
+2025/04/22 10:56:32 EVM executor initialized
+2025/04/22 10:56:32 Consensus engine started
+2025/04/22 10:56:32 Wave controller started
+2025/04/22 10:56:32 Message handlers registered
+2025/04/22 10:56:34 Starting BlazeDAG node on port 3001 (Validator: true)
+2025/04/22 10:56:34 Warning: Failed to load saved state: failed to unmarshal blocks: json: cannot unmarshal object into Go value of type []*types.Block
+2025/04/22 10:56:34 P2P node started with ID: node-3001
+2025/04/22 10:56:34 Message handler started
+2025/04/22 10:56:34 DAG initialized
+2025/04/22 10:56:34 State manager initialized
+2025/04/22 10:56:34 EVM executor initialized
+2025/04/22 10:56:34 Consensus engine started
+2025/04/22 10:56:34 Wave controller started
+2025/04/22 10:56:34 Message handlers registered
+2025/04/22 10:56:54 No pending transactions to create block
+2025/04/22 10:59:20 Added transaction to mempool: bceb7e853373860d95547ad946fee85a07a7a41b7b569e0836199e1ea98c9e08
+2025/04/22 10:59:20 Updated existing recipient account 87d5a6209a138d057df870e95fd951cb44be38b0 balance: 1001100
+2025/04/22 10:59:20 Updated sender 76c53aa91887f562d077e857c936a61585f260d0 nonce: 1
+2025/04/22 10:59:20 Transaction sent: bceb7e853373860d95547ad946fee85a07a7a41b7b569e0836199e1ea98c9e08 (From: 76c53aa91887f562d077e857c936a61585f260d0, To: 87d5a6209a138d057df870e95fd951cb44be38b0, Amount: 100)
+2025/04/22 10:59:30 Cleared mempool after block creation
+2025/04/22 10:59:30 Block created and broadcast: c0ca96204c90574df9a891c2f00b7f5c703971c56de24eb308ba9080de970ad4 (Height: 1, Wave: 0, Transactions: 1)
