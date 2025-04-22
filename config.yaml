@@ -1,0 +1,16 @@
+p2p:
+  port: 9000
+  bootstrap_peers: []
+
+consensus:
+  total_validators: 10
+  fault_tolerance: 3
+  round_duration: 2s
+  wave_timeout: 10s
+
+state:
+  genesis_file: "genesis.json"
+
+evm:
+  chain_id: 1
+  gas_limit: 8000000 

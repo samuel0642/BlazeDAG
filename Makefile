@@ -1,31 +1,29 @@
-.PHONY: build test-all test-network test-consensus test-transaction test-dag test clean
+.PHONY: build run clean test
 
-# Build the main binary
+# Build the BlazeDAG binary
 build:
-	go build -o blazedag ./cmd/blazedag
+	go build -o bin/blazedag ./cmd/blazedag
 
+# Run the BlazeDAG node
+run: build
+	./bin/blazedag
 
-# Run network service tests
-test-network:
-	go test -v ./internal/network/...
-
-# Run consensus engine tests
-test-consensus:
-	go test -v ./internal/consensus/...
-
-# Run transaction pool tests
-test-transaction:
-	go test -v ./internal/transaction/... 
-
-# Run DAG core tests
-test-dag:
-	go test -v ./internal/dag/...
-
-# Run all tests with timeouts
-test:
-	go test -v ./...
+# Run as validator
+run-validator: build
+	./bin/blazedag --validator
 
 # Clean build artifacts
 clean:
-	rm -f blazedag
-	rm -rf /tmp/blazedag_test_* 
+	rm -rf bin/
+
+# Run tests
+test:
+	go test ./...
+
+# Run with specific port
+run-port: build
+	./bin/blazedag --port $(port)
+
+# Run with genesis file
+run-genesis: build
+	./bin/blazedag --genesis $(genesis) 

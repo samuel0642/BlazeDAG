@@ -1,10 +1,12 @@
 package transaction
 
 import (
+	"container/heap"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/samuel0642/BlazeDAG/internal/state"
 	"github.com/samuel0642/BlazeDAG/internal/types"
@@ -27,6 +29,56 @@ var (
 	ErrPoolFull = errors.New("transaction pool is full")
 )
 
+// Transaction represents a blockchain transaction
+type Transaction struct {
+	Hash      string
+	From      string
+	To        string
+	Value     uint64
+	GasPrice  uint64
+	GasLimit  uint64
+	Nonce     uint64
+	Data      []byte
+	Signature []byte
+	Timestamp time.Time
+}
+
+// TransactionPool manages the pool of pending transactions
+type TransactionPool struct {
+	pending    map[string]*Transaction
+	validated  map[string]*Transaction
+	rejected   map[string]*Transaction
+	priority   *PriorityQueue
+	mu         sync.RWMutex
+}
+
+// PriorityQueue implements heap.Interface for transaction priority
+type PriorityQueue []*Transaction
+
+func (pq PriorityQueue) Len() int { return len(pq) }
+
+func (pq PriorityQueue) Less(i, j int) bool {
+	// Higher gas price transactions have higher priority
+	return pq[i].GasPrice > pq[j].GasPrice
+}
+
+func (pq PriorityQueue) Swap(i, j int) {
+	pq[i], pq[j] = pq[j], pq[i]
+}
+
+func (pq *PriorityQueue) Push(x interface{}) {
+	item := x.(*Transaction)
+	*pq = append(*pq, item)
+}
+
+func (pq *PriorityQueue) Pop() interface{} {
+	old := *pq
+	n := len(old)
+	item := old[n-1]
+	*pq = old[0 : n-1]
+	return item
+}
+
 // Pool represents the transaction pool
 type Pool struct {
 	state    *state.State
@@ -41,6 +93,18 @@ func NewPool(state *state.State, maxSize int) *Pool {
 		state:   state,
 		txs:     make(map[string]*types.Transaction),
 		maxSize: maxSize,
+	}
+}
+
+// NewTransactionPool creates a new transaction pool
+func NewTransactionPool() *TransactionPool {
+	pq := &PriorityQueue{}
+	heap.Init(pq)
+	return &TransactionPool{
+		pending:   make(map[string]*Transaction),
+		validated: make(map[string]*Transaction),
+		rejected:  make(map[string]*Transaction),
+		priority:  pq,
 	}
 }
 
@@ -249,4 +313,108 @@ func (p *Pool) GenerateReceipt(tx *types.Transaction, blockHash []byte, blockNum
 func (p *Pool) HasAccount(address []byte) bool {
 	_, err := p.state.GetAccount(string(address))
 	return err == nil
+}
+
+// AddTransaction adds a transaction to the pool
+func (tp *TransactionPool) AddTransaction(tx *Transaction) {
+	tp.mu.Lock()
+	defer tp.mu.Unlock()
+
+	tp.pending[tx.Hash] = tx
+	heap.Push(tp.priority, tx)
+}
+
+// RemoveTransaction removes a transaction from the pool
+func (tp *TransactionPool) RemoveTransaction(hash string) {
+	tp.mu.Lock()
+	defer tp.mu.Unlock()
+
+	delete(tp.pending, hash)
+	delete(tp.validated, hash)
+	delete(tp.rejected, hash)
+}
+
+// GetTransaction returns a transaction by hash
+func (tp *TransactionPool) GetTransaction(hash string) *Transaction {
+	tp.mu.RLock()
+	defer tp.mu.RUnlock()
+
+	if tx, exists := tp.pending[hash]; exists {
+		return tx
+	}
+	if tx, exists := tp.validated[hash]; exists {
+		return tx
+	}
+	return nil
+}
+
+// GetPendingTransactions returns all pending transactions
+func (tp *TransactionPool) GetPendingTransactions() []*Transaction {
+	tp.mu.RLock()
+	defer tp.mu.RUnlock()
+
+	txs := make([]*Transaction, 0, len(tp.pending))
+	for _, tx := range tp.pending {
+		txs = append(txs, tx)
+	}
+	return txs
+}
+
+// GetValidatedTransactions returns all validated transactions
+func (tp *TransactionPool) GetValidatedTransactions() []*Transaction {
+	tp.mu.RLock()
+	defer tp.mu.RUnlock()
+
+	txs := make([]*Transaction, 0, len(tp.validated))
+	for _, tx := range tp.validated {
+		txs = append(txs, tx)
+	}
+	return txs
+}
+
+// GetNextTransaction returns the next transaction to process
+func (tp *TransactionPool) GetNextTransaction() *Transaction {
+	tp.mu.Lock()
+	defer tp.mu.Unlock()
+
+	if tp.priority.Len() == 0 {
+		return nil
+	}
+
+	tx := heap.Pop(tp.priority).(*Transaction)
+	delete(tp.pending, tx.Hash)
+	return tx
+}
+
+// UpdateTransactionPriority updates a transaction's priority
+func (tp *TransactionPool) UpdateTransactionPriority(hash string, newGasPrice uint64) {
+	tp.mu.Lock()
+	defer tp.mu.Unlock()
+
+	if tx, exists := tp.pending[hash]; exists {
+		tx.GasPrice = newGasPrice
+		heap.Fix(tp.priority, 0)
+	}
+}
+
+// MarkTransactionValidated marks a transaction as validated
+func (tp *TransactionPool) MarkTransactionValidated(hash string) {
+	tp.mu.Lock()
+	defer tp.mu.Unlock()
+
+	if tx, exists := tp.pending[hash]; exists {
+		tp.validated[hash] = tx
+		delete(tp.pending, hash)
+	}
+}
+
+// MarkTransactionRejected marks a transaction as rejected
+func (tp *TransactionPool) MarkTransactionRejected(hash string) {
+	tp.mu.Lock()
+	defer tp.mu.Unlock()
+
+	if tx, exists := tp.pending[hash]; exists {
+		tp.rejected[hash] = tx
+		delete(tp.pending, hash)
+	}
 } 
