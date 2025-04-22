@@ -81,7 +81,7 @@ func (wc *WaveController) AddBlock(block *Block) {
 
 	if wc.currentWave != nil {
 		wc.currentWave.Blocks[block.Hash] = block
-		wc.dag.AddBlock(block)
+		wc.dag.AddBlock(block.ToTypesBlock())
 	}
 }
 

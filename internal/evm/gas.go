@@ -59,7 +59,7 @@ func (gm *GasManager) EstimateGas(tx *Transaction) uint64 {
 	}
 
 	// Add gas for contract creation
-	if tx.To == "" {
+	if len(tx.To) == 0 {
 		gas += 53000
 	}
 

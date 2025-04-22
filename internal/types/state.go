@@ -1,14 +1,5 @@
 package types
 
-// StateProof represents a state proof
-type StateProof struct {
-	Address string
-	Key     string
-	Value   []byte
-	Proof   [][]byte
-	Root    string
-}
-
 // State represents the global state
 type State struct {
 	Accounts map[string]*Account

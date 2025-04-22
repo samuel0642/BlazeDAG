@@ -2,109 +2,71 @@ package consensus
 
 import (
 	"sync"
-	"time"
+
+	"github.com/CrossDAG/BlazeDAG/internal/core"
+	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
-
-// Certificate represents a block certificate
-type Certificate struct {
-	BlockHash    string
-	Signatures   []*Signature
-	Round        int
-	Wave         int
-	ValidatorSet []string
-	Timestamp    time.Time
-}
-
-// Signature represents a validator's signature
-type Signature struct {
-	Validator  string
-	Signature  []byte
-	Timestamp  time.Time
-}
 
 // BlockFinalizer handles block finalization
 type BlockFinalizer struct {
-	certificates map[string]*Certificate
+	dag          *core.DAG
+	certificates map[string]*types.Certificate
 	mu           sync.RWMutex
 }
 
 // NewBlockFinalizer creates a new block finalizer
-func NewBlockFinalizer() *BlockFinalizer {
+func NewBlockFinalizer(dag *core.DAG) *BlockFinalizer {
 	return &BlockFinalizer{
-		certificates: make(map[string]*Certificate),
+		dag:          dag,
+		certificates: make(map[string]*types.Certificate),
 	}
 }
 
-// AddSignature adds a signature to a block's certificate
-func (bf *BlockFinalizer) AddSignature(blockHash string, signature *Signature) {
+// AddCertificate adds a certificate to the finalizer
+func (bf *BlockFinalizer) AddCertificate(cert *types.Certificate) error {
 	bf.mu.Lock()
 	defer bf.mu.Unlock()
+
+	blockHash := string(cert.BlockHash)
+	bf.certificates[blockHash] = cert
+	return nil
+}
+
+// GetCertificate retrieves a certificate for a block
+func (bf *BlockFinalizer) GetCertificate(blockHash string) (*types.Certificate, bool) {
+	bf.mu.RLock()
+	defer bf.mu.RUnlock()
+
+	cert, exists := bf.certificates[blockHash]
+	return cert, exists
+}
+
+// IsFinalized checks if a block is finalized
+func (bf *BlockFinalizer) IsFinalized(blockHash string) bool {
+	bf.mu.RLock()
+	defer bf.mu.RUnlock()
 
 	cert, exists := bf.certificates[blockHash]
 	if !exists {
-		cert = &Certificate{
-			BlockHash: blockHash,
-			Signatures: make([]*Signature, 0),
-		}
-		bf.certificates[blockHash] = cert
-	}
-
-	cert.Signatures = append(cert.Signatures, signature)
-}
-
-// GetCertificate returns the certificate for a block
-func (bf *BlockFinalizer) GetCertificate(blockHash string) *Certificate {
-	bf.mu.RLock()
-	defer bf.mu.RUnlock()
-	return bf.certificates[blockHash]
-}
-
-// HasQuorum checks if a block has enough signatures to reach quorum
-func (bf *BlockFinalizer) HasQuorum(blockHash string, totalValidators int, faultTolerance int) bool {
-	bf.mu.RLock()
-	defer bf.mu.RUnlock()
-
-	cert := bf.certificates[blockHash]
-	if cert == nil {
 		return false
 	}
 
-	// Count unique validators who signed
-	validators := make(map[string]bool)
-	for _, sig := range cert.Signatures {
-		validators[sig.Validator] = true
-	}
-
-	// Check if we have enough signatures (2f+1)
-	return len(validators) >= (2*faultTolerance + 1)
+	// A block is finalized if it has a valid certificate with enough signatures
+	requiredSignatures := 2*33 + 1 // 2f+1 where f=33
+	return cert != nil && len(cert.Signatures) >= requiredSignatures
 }
 
-// FinalizeBlock finalizes a block
-func (bf *BlockFinalizer) FinalizeBlock(blockHash string, round int, wave int, validatorSet []string) *Certificate {
-	bf.mu.Lock()
-	defer bf.mu.Unlock()
-
-	cert := bf.certificates[blockHash]
-	if cert == nil {
-		return nil
-	}
-
-	cert.Round = round
-	cert.Wave = wave
-	cert.ValidatorSet = validatorSet
-	cert.Timestamp = time.Now()
-
-	return cert
-}
-
-// GetFinalizedBlocks returns all finalized blocks
+// GetFinalizedBlocks returns all finalized block hashes
 func (bf *BlockFinalizer) GetFinalizedBlocks() []string {
 	bf.mu.RLock()
 	defer bf.mu.RUnlock()
 
-	blocks := make([]string, 0, len(bf.certificates))
-	for blockHash := range bf.certificates {
-		blocks = append(blocks, blockHash)
+	var finalized []string
+	requiredSignatures := 2*33 + 1 // 2f+1 where f=33
+	for blockHash, cert := range bf.certificates {
+		if cert != nil && len(cert.Signatures) >= requiredSignatures {
+			finalized = append(finalized, blockHash)
+		}
 	}
-	return blocks
+	return finalized
 } 
