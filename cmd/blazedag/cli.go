@@ -4,11 +4,13 @@ import (
 	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -19,6 +21,14 @@ import (
 	"github.com/CrossDAG/BlazeDAG/internal/network"
 	"github.com/CrossDAG/BlazeDAG/internal/state"
 	"github.com/CrossDAG/BlazeDAG/internal/types"
+)
+
+const (
+	dataDir = "chaindata"
+	accountsFile = "accounts.json"
+	blocksFile = "blocks.json"
+	stateFile = "state.json"
+	logFile = "chain.log"
 )
 
 type CLI struct {
@@ -32,25 +42,51 @@ type CLI struct {
 	accounts        map[string]*types.Account
 	currentWave     uint64
 	isValidator     bool
+	dataDir         string
+	logger          *log.Logger
+	mempool         *core.Mempool
 }
 
 func NewCLI() *CLI {
 	return &CLI{
 		accounts:    make(map[string]*types.Account),
 		currentWave: 0,
+		dataDir:     dataDir,
+		mempool:     core.NewMempool(),
 	}
 }
 
 func (cli *CLI) Start(port int, isValidator bool) error {
 	cli.isValidator = isValidator
 
+	// Create data directory if it doesn't exist
+	if err := os.MkdirAll(cli.dataDir, 0755); err != nil {
+		return fmt.Errorf("failed to create data directory: %v", err)
+	}
+
+	// Setup logging
+	logPath := filepath.Join(cli.dataDir, logFile)
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %v", err)
+	}
+	cli.logger = log.New(logFile, "", log.LstdFlags)
+	cli.logger.Printf("Starting BlazeDAG node on port %d (Validator: %v)", port, isValidator)
+
+	// Load saved state
+	if err := cli.loadState(); err != nil {
+		cli.logger.Printf("Warning: Failed to load saved state: %v", err)
+	}
+
 	// Create P2P node
 	nodeID := network.PeerID(fmt.Sprintf("node-%d", port))
 	node := network.NewP2PNode(nodeID)
+	node.Port = port  // Set the port
 	if err := node.Start(); err != nil {
 		return fmt.Errorf("failed to start P2P node: %v", err)
 	}
 	cli.node = node
+	cli.logger.Printf("P2P node started with ID: %s", nodeID)
 
 	// Create message handler
 	msgHandler := network.NewMessageHandler(node)
@@ -58,18 +94,22 @@ func (cli *CLI) Start(port int, isValidator bool) error {
 		return fmt.Errorf("failed to start message handler: %v", err)
 	}
 	cli.msgHandler = msgHandler
+	cli.logger.Printf("Message handler started")
 
 	// Create DAG
 	dag := core.NewDAG()
 	cli.dag = dag
+	cli.logger.Printf("DAG initialized")
 
 	// Create state manager
 	stateManager := state.NewStateManager()
 	cli.stateManager = stateManager
+	cli.logger.Printf("State manager initialized")
 
 	// Create EVM executor
 	evm := core.NewEVMExecutor(stateManager)
 	cli.evm = evm
+	cli.logger.Printf("EVM executor initialized")
 
 	// Create consensus engine
 	consensusEngine := consensus.NewConsensusEngine(dag, stateManager, evm, isValidator)
@@ -77,6 +117,7 @@ func (cli *CLI) Start(port int, isValidator bool) error {
 		return fmt.Errorf("failed to start consensus engine: %v", err)
 	}
 	cli.consensusEngine = consensusEngine
+	cli.logger.Printf("Consensus engine started")
 
 	// Create wave controller
 	waveController := consensus.NewWaveController(consensusEngine)
@@ -84,9 +125,83 @@ func (cli *CLI) Start(port int, isValidator bool) error {
 		return fmt.Errorf("failed to start wave controller: %v", err)
 	}
 	cli.waveController = waveController
+	cli.logger.Printf("Wave controller started")
 
 	// Register message handlers
 	cli.registerMessageHandlers()
+	cli.logger.Printf("Message handlers registered")
+
+	return nil
+}
+
+func (cli *CLI) loadState() error {
+	// Load accounts
+	accountsPath := filepath.Join(cli.dataDir, accountsFile)
+	if data, err := os.ReadFile(accountsPath); err == nil {
+		if err := json.Unmarshal(data, &cli.accounts); err != nil {
+			return fmt.Errorf("failed to unmarshal accounts: %v", err)
+		}
+	}
+
+	// Load blocks
+	blocksPath := filepath.Join(cli.dataDir, blocksFile)
+	if data, err := os.ReadFile(blocksPath); err == nil {
+		var blocks []*types.Block
+		if err := json.Unmarshal(data, &blocks); err != nil {
+			return fmt.Errorf("failed to unmarshal blocks: %v", err)
+		}
+		for _, block := range blocks {
+			if err := cli.dag.AddBlock(block); err != nil {
+				return fmt.Errorf("failed to add block: %v", err)
+			}
+		}
+	}
+
+	// Load state
+	statePath := filepath.Join(cli.dataDir, stateFile)
+	if data, err := os.ReadFile(statePath); err == nil {
+		var state struct {
+			CurrentWave uint64 `json:"currentWave"`
+		}
+		if err := json.Unmarshal(data, &state); err != nil {
+			return fmt.Errorf("failed to unmarshal state: %v", err)
+		}
+		cli.currentWave = state.CurrentWave
+	}
+
+	return nil
+}
+
+func (cli *CLI) saveState() error {
+	// Save accounts
+	accountsPath := filepath.Join(cli.dataDir, accountsFile)
+	if data, err := json.Marshal(cli.accounts); err != nil {
+		return fmt.Errorf("failed to marshal accounts: %v", err)
+	} else if err := os.WriteFile(accountsPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write accounts: %v", err)
+	}
+
+	// Save blocks
+	blocksPath := filepath.Join(cli.dataDir, blocksFile)
+	blocks := cli.dag.GetBlocks()
+	if data, err := json.Marshal(blocks); err != nil {
+		return fmt.Errorf("failed to marshal blocks: %v", err)
+	} else if err := os.WriteFile(blocksPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write blocks: %v", err)
+	}
+
+	// Save state
+	statePath := filepath.Join(cli.dataDir, stateFile)
+	state := struct {
+		CurrentWave uint64 `json:"currentWave"`
+	}{
+		CurrentWave: cli.currentWave,
+	}
+	if data, err := json.Marshal(state); err != nil {
+		return fmt.Errorf("failed to marshal state: %v", err)
+	} else if err := os.WriteFile(statePath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write state: %v", err)
+	}
 
 	return nil
 }
@@ -95,41 +210,63 @@ func (cli *CLI) registerMessageHandlers() {
 	cli.msgHandler.RegisterHandler(network.MessageTypeBlock, func(msg *network.Message) error {
 		var block types.Block
 		if err := msg.UnmarshalPayload(&block); err != nil {
+			cli.logger.Printf("Error: Failed to unmarshal block: %v", err)
 			return fmt.Errorf("failed to unmarshal block: %v", err)
 		}
+		cli.logger.Printf("Received block: %s (Height: %d, Wave: %d)", 
+			block.Hash(), block.Header.Height, block.Header.Wave)
 		return cli.consensusEngine.HandleBlock(&block)
 	})
 
 	cli.msgHandler.RegisterHandler(network.MessageTypeVote, func(msg *network.Message) error {
 		var vote consensus.Vote
 		if err := msg.UnmarshalPayload(&vote); err != nil {
+			cli.logger.Printf("Error: Failed to unmarshal vote: %v", err)
 			return fmt.Errorf("failed to unmarshal vote: %v", err)
 		}
+		cli.logger.Printf("Received vote for block: %s from validator: %s", 
+			vote.BlockHash, hex.EncodeToString(vote.Validator))
 		return cli.consensusEngine.HandleVote(&vote)
 	})
 
 	cli.msgHandler.RegisterHandler(network.MessageTypeCertificate, func(msg *network.Message) error {
 		var cert types.Certificate
 		if err := msg.UnmarshalPayload(&cert); err != nil {
+			cli.logger.Printf("Error: Failed to unmarshal certificate: %v", err)
 			return fmt.Errorf("failed to unmarshal certificate: %v", err)
 		}
+		cli.logger.Printf("Received certificate for block: %s with %d signatures", 
+			hex.EncodeToString(cert.BlockHash), len(cert.Signatures))
 		return cli.consensusEngine.HandleCertificate(&cert)
 	})
 }
 
 func (cli *CLI) Stop() {
+	cli.logger.Printf("Shutting down node...")
+
+	// Save state before stopping
+	if err := cli.saveState(); err != nil {
+		cli.logger.Printf("Warning: Failed to save state: %v", err)
+	}
+
 	if cli.waveController != nil {
 		cli.waveController.Stop()
+		cli.logger.Printf("Wave controller stopped")
 	}
 	if cli.consensusEngine != nil {
 		cli.consensusEngine.Stop()
+		cli.logger.Printf("Consensus engine stopped")
 	}
 	if cli.msgHandler != nil {
 		cli.msgHandler.Stop()
+		cli.logger.Printf("Message handler stopped")
 	}
 	if cli.node != nil {
 		cli.node.Stop()
+		cli.logger.Printf("P2P node stopped")
 	}
+
+	cli.logger.Printf("Node shutdown complete")
 }
 
 func (cli *CLI) Run() {
@@ -160,6 +297,12 @@ func (cli *CLI) Run() {
 			cli.printPeers()
 		case "blocks":
 			cli.printBlocks()
+		case "block":
+			if len(args) < 1 {
+				fmt.Println("Usage: block <hash>")
+				continue
+			}
+			cli.printBlockDetails(args[0])
 		case "newaccount":
 			cli.createNewAccount()
 		case "accounts":
@@ -192,6 +335,7 @@ func (cli *CLI) printHelp() {
 	fmt.Println("  status      - Show node status")
 	fmt.Println("  peers       - List connected peers")
 	fmt.Println("  blocks      - List recent blocks")
+	fmt.Println("  block       - Show block details")
 	fmt.Println("  newaccount  - Create a new account")
 	fmt.Println("  accounts    - List all accounts")
 	fmt.Println("  balance     - Check account balance")
@@ -218,20 +362,63 @@ func (cli *CLI) printPeers() {
 
 func (cli *CLI) printBlocks() {
 	// Get the last 10 blocks from the DAG
-	blocks := make([]*types.Block, 0)
-	for _, block := range cli.dag.GetBlocks() {
-		blocks = append(blocks, block)
-		if len(blocks) >= 10 {
-			break
-		}
-	}
+	blocks := cli.dag.GetRecentBlocks(10)
 
 	fmt.Printf("Recent Blocks (%d):\n", len(blocks))
 	for _, block := range blocks {
-		fmt.Printf("  - Hash: %s, Height: %d, Wave: %d\n",
-			block.Hash(),
-			block.Header.Height,
-			block.Header.Wave)
+		fmt.Printf("  - Hash: %s\n", block.Hash())
+		fmt.Printf("    Height: %d\n", block.Header.Height)
+		fmt.Printf("    Wave: %d\n", block.Header.Wave)
+		fmt.Printf("    Timestamp: %s\n", block.Timestamp.Format(time.RFC3339))
+		fmt.Printf("    Transactions: %d\n", len(block.Body.Transactions))
+		fmt.Printf("    Consensus Status: %s\n", cli.getConsensusStatus(block))
+		fmt.Printf("    Confirmations: %d\n", cli.getConfirmations(block))
+		fmt.Println()
+	}
+}
+
+func (cli *CLI) getConsensusStatus(block *types.Block) string {
+	// Check if block has a certificate
+	if block.Certificate != nil && len(block.Certificate.Signatures) > 0 {
+		return "Finalized"
+	}
+	return "Pending"
+}
+
+func (cli *CLI) getConfirmations(block *types.Block) int {
+	// Count how many blocks have been added after this one
+	currentHeight := cli.dag.GetHeight()
+	if currentHeight < block.Header.Height {
+		return 0
+	}
+	return int(currentHeight - block.Header.Height)
+}
+
+func (cli *CLI) printBlockDetails(hash string) {
+	block, err := cli.dag.GetBlock(hash)
+	if err != nil {
+		fmt.Printf("Block not found: %s\n", hash)
+		return
+	}
+
+	fmt.Printf("Block Details:\n")
+	fmt.Printf("  Hash: %s\n", block.Hash())
+	fmt.Printf("  Height: %d\n", block.Header.Height)
+	fmt.Printf("  Wave: %d\n", block.Header.Wave)
+	fmt.Printf("  Timestamp: %s\n", block.Timestamp.Format(time.RFC3339))
+	fmt.Printf("  Consensus Status: %s\n", cli.getConsensusStatus(block))
+	fmt.Printf("  Confirmations: %d\n", cli.getConfirmations(block))
+	fmt.Printf("  Transactions: %d\n", len(block.Body.Transactions))
+	
+	if len(block.Body.Transactions) > 0 {
+		fmt.Printf("\nTransactions:\n")
+		for i, tx := range block.Body.Transactions {
+			fmt.Printf("  %d. Hash: %s\n", i+1, hex.EncodeToString(tx.Hash()))
+			fmt.Printf("     From: %s\n", hex.EncodeToString(tx.From))
+			fmt.Printf("     To: %s\n", hex.EncodeToString(tx.To))
+			fmt.Printf("     Amount: %d\n", tx.Value)
+			fmt.Printf("     Nonce: %d\n", tx.Nonce)
+		}
 	}
 }
 
@@ -244,11 +431,18 @@ func (cli *CLI) createNewAccount() {
 
 	account := &types.Account{
 		Address: addr,
-		Balance: 0,
+		Balance: 1000000, // Give initial balance
 		Nonce:   0,
 	}
 	cli.accounts[hex.EncodeToString(addr)] = account
 	fmt.Printf("Created new account: %s\n", hex.EncodeToString(addr))
+	cli.logger.Printf("Created new account: %s with initial balance: %d", 
+		hex.EncodeToString(addr), account.Balance)
+
+	// Save state after creating account
+	if err := cli.saveState(); err != nil {
+		cli.logger.Printf("Warning: Failed to save state after creating account: %v", err)
+	}
 }
 
 func (cli *CLI) listAccounts() {
@@ -271,6 +465,7 @@ func (cli *CLI) sendTransaction(from, to, amountStr string) {
 	// Parse amount
 	amount, err := strconv.ParseUint(amountStr, 10, 64)
 	if err != nil {
+		cli.logger.Printf("Error: Invalid amount: %s", amountStr)
 		fmt.Printf("Invalid amount: %s\n", amountStr)
 		return
 	}
@@ -278,12 +473,15 @@ func (cli *CLI) sendTransaction(from, to, amountStr string) {
 	// Get sender account
 	sender, ok := cli.accounts[from]
 	if !ok {
+		cli.logger.Printf("Error: Sender account not found: %s", from)
 		fmt.Printf("Sender account not found: %s\n", from)
 		return
 	}
 
 	// Check balance
 	if sender.Balance < amount {
+		cli.logger.Printf("Error: Insufficient balance for %s: %d < %d", 
+			from, sender.Balance, amount)
 		fmt.Printf("Insufficient balance: %d < %d\n", sender.Balance, amount)
 		return
 	}
@@ -299,30 +497,69 @@ func (cli *CLI) sendTransaction(from, to, amountStr string) {
 		Data:     nil,
 	}
 
-	// Broadcast transaction
-	if err := cli.msgHandler.BroadcastMessage(network.MessageTypeBlock, tx); err != nil {
-		fmt.Printf("Failed to broadcast transaction: %v\n", err)
-		return
+	// Add transaction to mempool
+	cli.mempool.AddTransaction(tx)
+	cli.logger.Printf("Added transaction to mempool: %s", hex.EncodeToString(tx.Hash()))
+
+	// Update balances
+	sender.Balance -= amount
+	if recipient, ok := cli.accounts[to]; ok {
+		recipient.Balance += amount
+		cli.logger.Printf("Updated existing recipient account %s balance: %d", 
+			to, recipient.Balance)
+	} else {
+		// Create recipient account if it doesn't exist
+		recipient := &types.Account{
+			Address: []byte(to),
+			Balance: amount,
+			Nonce:   0,
+		}
+		cli.accounts[to] = recipient
+		cli.logger.Printf("Created new recipient account %s with balance: %d", 
+			to, amount)
 	}
 
 	// Update sender nonce
 	sender.Nonce++
-	fmt.Printf("Transaction sent: %s\n", hex.EncodeToString(tx.Hash()))
+	cli.logger.Printf("Updated sender %s nonce: %d", from, sender.Nonce)
+
+	// Broadcast transaction
+	if err := cli.msgHandler.BroadcastMessage(network.MessageTypeBlock, tx); err != nil {
+		cli.logger.Printf("Error: Failed to broadcast transaction: %v", err)
+		fmt.Printf("Failed to broadcast transaction: %v\n", err)
+		return
+	}
+
+	txHash := hex.EncodeToString(tx.Hash())
+	fmt.Printf("Transaction sent: %s\n", txHash)
+	cli.logger.Printf("Transaction sent: %s (From: %s, To: %s, Amount: %d)", 
+		txHash, from, to, amount)
+
+	// Save state after transaction
+	if err := cli.saveState(); err != nil {
+		cli.logger.Printf("Warning: Failed to save state after transaction: %v", err)
+	}
 }
 
 func (cli *CLI) createBlock() {
 	if !cli.isValidator {
+		cli.logger.Printf("Error: Non-validator attempted to create block")
 		fmt.Println("Only validators can create blocks")
 		return
 	}
 
 	// Get pending transactions from mempool
-	txs := make([]types.Transaction, 0)
-	// TODO: Implement mempool and get pending transactions
-
+	txs := cli.mempool.GetTransactions()
 	if len(txs) == 0 {
+		cli.logger.Printf("No pending transactions to create block")
 		fmt.Println("No pending transactions")
 		return
+	}
+
+	// Convert []*Transaction to []Transaction
+	blockTxs := make([]types.Transaction, len(txs))
+	for i, tx := range txs {
+		blockTxs[i] = *tx
 	}
 
 	// Create block
@@ -331,11 +568,11 @@ func (cli *CLI) createBlock() {
 			Version:    1,
 			Round:      cli.currentWave,
 			Wave:       cli.currentWave,
-			Height:     0, // Will be set by DAG
-			ParentHash: nil, // Will be set by DAG
+			Height:     cli.dag.GetHeight() + 1,
+			ParentHash: cli.dag.GetLatestBlockHash(),
 		},
 		Body: types.BlockBody{
-			Transactions: txs,
+			Transactions: blockTxs,
 		},
 		Timestamp: time.Now(),
 	}
@@ -344,13 +581,33 @@ func (cli *CLI) createBlock() {
 	blockHash := sha256.Sum256([]byte(block.Hash()))
 	block.Signature = blockHash[:]
 
+	// Add block to DAG
+	if err := cli.dag.AddBlock(block); err != nil {
+		cli.logger.Printf("Error: Failed to add block to DAG: %v", err)
+		fmt.Printf("Failed to add block to DAG: %v\n", err)
+		return
+	}
+
+	// Clear mempool after successful block creation
+	cli.mempool.Clear()
+	cli.logger.Printf("Cleared mempool after block creation")
+
 	// Broadcast block
 	if err := cli.msgHandler.BroadcastMessage(network.MessageTypeBlock, block); err != nil {
+		cli.logger.Printf("Error: Failed to broadcast block: %v", err)
 		fmt.Printf("Failed to broadcast block: %v\n", err)
 		return
 	}
 
-	fmt.Printf("Block created and broadcast: %s\n", block.Hash())
+	blockHashStr := block.Hash()
+	fmt.Printf("Block created and broadcast: %s\n", blockHashStr)
+	cli.logger.Printf("Block created and broadcast: %s (Height: %d, Wave: %d, Transactions: %d)", 
+		blockHashStr, block.Header.Height, block.Header.Wave, len(txs))
+
+	// Save state after creating block
+	if err := cli.saveState(); err != nil {
+		cli.logger.Printf("Warning: Failed to save state after creating block: %v", err)
+	}
 }
 
 func main() {
