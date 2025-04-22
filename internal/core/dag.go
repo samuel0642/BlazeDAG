@@ -54,4 +54,48 @@ func (d *DAG) GetReferences(hash string) ([]types.Reference, error) {
 		return nil, types.ErrBlockNotFound
 	}
 	return refs, nil
+}
+
+// GetBlocks returns all blocks in the DAG
+func (d *DAG) GetBlocks() map[string]*types.Block {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.blocks
+}
+
+// GetHeight returns the current height of the DAG
+func (d *DAG) GetHeight() uint64 {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	maxHeight := uint64(0)
+	for _, block := range d.blocks {
+		if block.Header.Height > maxHeight {
+			maxHeight = block.Header.Height
+		}
+	}
+	return maxHeight
+}
+
+// GetLatestBlockHash returns the hash of the latest block
+func (d *DAG) GetLatestBlockHash() []byte {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	var latestBlock *types.Block
+	var latestHeight uint64
+
+	for _, block := range d.blocks {
+		if block.Header.Height > latestHeight {
+			latestHeight = block.Header.Height
+			latestBlock = block
+		}
+	}
+
+	if latestBlock == nil {
+		return nil
+	}
+
+	hashStr := latestBlock.Hash()
+	return []byte(hashStr)
 } 
