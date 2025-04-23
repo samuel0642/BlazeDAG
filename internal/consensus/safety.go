@@ -3,15 +3,17 @@ package consensus
 import (
 	"sync"
 	"time"
+
+	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
 // Complaint represents a validator's complaint
 type Complaint struct {
-	BlockHash  string
+	BlockHash  types.Hash
 	Validator  string
 	Reason     string
 	Timestamp  time.Time
-	Signature  []byte
+	Signature  types.Signature
 }
 
 // SafetySystem handles safety mechanisms
@@ -36,29 +38,29 @@ func (ss *SafetySystem) AddComplaint(complaint *Complaint) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 
-	ss.complaints[complaint.BlockHash] = append(ss.complaints[complaint.BlockHash], complaint)
+	ss.complaints[string(complaint.BlockHash)] = append(ss.complaints[string(complaint.BlockHash)], complaint)
 }
 
 // GetComplaints returns all complaints for a block
-func (ss *SafetySystem) GetComplaints(blockHash string) []*Complaint {
+func (ss *SafetySystem) GetComplaints(blockHash types.Hash) []*Complaint {
 	ss.mu.RLock()
 	defer ss.mu.RUnlock()
-	return ss.complaints[blockHash]
+	return ss.complaints[string(blockHash)]
 }
 
 // SetTimeout sets a timeout for a block
-func (ss *SafetySystem) SetTimeout(blockHash string, timeout time.Time) {
+func (ss *SafetySystem) SetTimeout(blockHash types.Hash, timeout time.Time) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
-	ss.timeouts[blockHash] = timeout
+	ss.timeouts[string(blockHash)] = timeout
 }
 
 // CheckTimeout checks if a block has timed out
-func (ss *SafetySystem) CheckTimeout(blockHash string) bool {
+func (ss *SafetySystem) CheckTimeout(blockHash types.Hash) bool {
 	ss.mu.RLock()
 	defer ss.mu.RUnlock()
 
-	timeout, exists := ss.timeouts[blockHash]
+	timeout, exists := ss.timeouts[string(blockHash)]
 	if !exists {
 		return false
 	}
@@ -67,34 +69,34 @@ func (ss *SafetySystem) CheckTimeout(blockHash string) bool {
 }
 
 // StartRecovery starts recovery for a block
-func (ss *SafetySystem) StartRecovery(blockHash string) {
+func (ss *SafetySystem) StartRecovery(blockHash types.Hash) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
-	ss.recoveryState[blockHash] = true
+	ss.recoveryState[string(blockHash)] = true
 }
 
 // IsInRecovery checks if a block is in recovery
-func (ss *SafetySystem) IsInRecovery(blockHash string) bool {
+func (ss *SafetySystem) IsInRecovery(blockHash types.Hash) bool {
 	ss.mu.RLock()
 	defer ss.mu.RUnlock()
-	return ss.recoveryState[blockHash]
+	return ss.recoveryState[string(blockHash)]
 }
 
 // CompleteRecovery completes recovery for a block
-func (ss *SafetySystem) CompleteRecovery(blockHash string) {
+func (ss *SafetySystem) CompleteRecovery(blockHash types.Hash) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
-	delete(ss.recoveryState, blockHash)
+	delete(ss.recoveryState, string(blockHash))
 }
 
 // GetRecoveryBlocks returns all blocks in recovery
-func (ss *SafetySystem) GetRecoveryBlocks() []string {
+func (ss *SafetySystem) GetRecoveryBlocks() []types.Hash {
 	ss.mu.RLock()
 	defer ss.mu.RUnlock()
 
-	blocks := make([]string, 0, len(ss.recoveryState))
+	blocks := make([]types.Hash, 0, len(ss.recoveryState))
 	for blockHash := range ss.recoveryState {
-		blocks = append(blocks, blockHash)
+		blocks = append(blocks, []byte(blockHash))
 	}
 	return blocks
 }

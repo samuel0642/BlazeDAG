@@ -24,7 +24,7 @@ func NewMempool() *Mempool {
 func (m *Mempool) AddTransaction(tx *types.Transaction) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.transactions[hex.EncodeToString(tx.Hash())] = tx
+	m.transactions[hex.EncodeToString(tx.ComputeHash())] = tx
 }
 
 // GetTransactions returns all transactions in the mempool

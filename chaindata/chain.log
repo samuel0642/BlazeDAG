@@ -204,3 +204,53 @@
 2025/04/22 10:59:20 Transaction sent: bceb7e853373860d95547ad946fee85a07a7a41b7b569e0836199e1ea98c9e08 (From: 76c53aa91887f562d077e857c936a61585f260d0, To: 87d5a6209a138d057df870e95fd951cb44be38b0, Amount: 100)
 2025/04/22 10:59:30 Cleared mempool after block creation
 2025/04/22 10:59:30 Block created and broadcast: c0ca96204c90574df9a891c2f00b7f5c703971c56de24eb308ba9080de970ad4 (Height: 1, Wave: 0, Transactions: 1)
+2025/04/23 06:47:45 Starting BlazeDAG node on port 3000 (Validator: false)
+2025/04/23 06:47:45 Warning: Failed to load saved state: failed to unmarshal blocks: json: cannot unmarshal object into Go value of type []*types.Block
+2025/04/23 06:47:45 P2P node started with ID: node-3000
+2025/04/23 06:47:45 Message handler started
+2025/04/23 06:47:45 DAG initialized
+2025/04/23 06:47:45 State manager initialized
+2025/04/23 06:47:45 EVM executor initialized
+2025/04/23 06:47:45 Consensus engine started
+2025/04/23 06:47:45 Wave controller started
+2025/04/23 06:47:45 Message handlers registered
+2025/04/23 06:47:48 Shutting down node...
+2025/04/23 06:47:48 Wave controller stopped
+2025/04/23 06:47:48 Consensus engine stopped
+2025/04/23 06:47:48 Message handler stopped
+2025/04/23 06:47:48 P2P node stopped
+2025/04/23 06:47:48 Node shutdown complete
+2025/04/23 11:27:19 Starting BlazeDAG node on port 3000 (Validator: false)
+2025/04/23 11:27:19 Warning: Failed to load saved state: failed to unmarshal blocks: json: cannot unmarshal object into Go value of type []*types.Block
+2025/04/23 11:27:19 P2P node started with ID: node-3000
+2025/04/23 11:27:19 Message handler started
+2025/04/23 11:27:19 DAG initialized
+2025/04/23 11:27:19 State manager initialized
+2025/04/23 11:27:19 EVM executor initialized
+2025/04/23 11:27:19 Consensus engine started
+2025/04/23 11:27:19 Wave controller started
+2025/04/23 11:27:19 Message handlers registered
+2025/04/23 11:27:25 Shutting down node...
+2025/04/23 11:27:25 Wave controller stopped
+2025/04/23 11:27:25 Consensus engine stopped
+2025/04/23 11:27:25 Message handler stopped
+2025/04/23 11:27:25 P2P node stopped
+2025/04/23 11:27:25 Node shutdown complete
+2025/04/23 11:30:04 Starting BlazeDAG node on port 3000 (Validator: true)
+2025/04/23 11:30:04 P2P node started with ID: node-3000
+2025/04/23 11:30:04 Message handler started
+2025/04/23 11:30:04 DAG initialized
+2025/04/23 11:30:04 State manager initialized
+2025/04/23 11:30:04 EVM executor initialized
+2025/04/23 11:30:04 Consensus engine started
+2025/04/23 11:30:04 Wave controller started
+2025/04/23 11:30:04 Message handlers registered
+2025/04/23 11:30:20 Starting BlazeDAG node on port 3001 (Validator: true)
+2025/04/23 11:30:20 P2P node started with ID: node-3001
+2025/04/23 11:30:20 Message handler started
+2025/04/23 11:30:20 DAG initialized
+2025/04/23 11:30:20 State manager initialized
+2025/04/23 11:30:20 EVM executor initialized
+2025/04/23 11:30:20 Consensus engine started
+2025/04/23 11:30:20 Wave controller started
+2025/04/23 11:30:20 Message handlers registered

@@ -33,20 +33,20 @@ func (bf *BlockFinalizer) AddCertificate(cert *types.Certificate) error {
 }
 
 // GetCertificate retrieves a certificate for a block
-func (bf *BlockFinalizer) GetCertificate(blockHash string) (*types.Certificate, bool) {
+func (bf *BlockFinalizer) GetCertificate(blockHash types.Hash) (*types.Certificate, bool) {
 	bf.mu.RLock()
 	defer bf.mu.RUnlock()
 
-	cert, exists := bf.certificates[blockHash]
+	cert, exists := bf.certificates[string(blockHash)]
 	return cert, exists
 }
 
 // IsFinalized checks if a block is finalized
-func (bf *BlockFinalizer) IsFinalized(blockHash string) bool {
+func (bf *BlockFinalizer) IsFinalized(blockHash types.Hash) bool {
 	bf.mu.RLock()
 	defer bf.mu.RUnlock()
 
-	cert, exists := bf.certificates[blockHash]
+	cert, exists := bf.certificates[string(blockHash)]
 	if !exists {
 		return false
 	}
@@ -57,15 +57,15 @@ func (bf *BlockFinalizer) IsFinalized(blockHash string) bool {
 }
 
 // GetFinalizedBlocks returns all finalized block hashes
-func (bf *BlockFinalizer) GetFinalizedBlocks() []string {
+func (bf *BlockFinalizer) GetFinalizedBlocks() []types.Hash {
 	bf.mu.RLock()
 	defer bf.mu.RUnlock()
 
-	var finalized []string
+	var finalized []types.Hash
 	requiredSignatures := 2*33 + 1 // 2f+1 where f=33
 	for blockHash, cert := range bf.certificates {
 		if cert != nil && len(cert.Signatures) >= requiredSignatures {
-			finalized = append(finalized, blockHash)
+			finalized = append(finalized, []byte(blockHash))
 		}
 	}
 	return finalized

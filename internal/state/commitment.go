@@ -9,8 +9,8 @@ import (
 
 // StateCommitment represents a state commitment
 type StateCommitment struct {
-	StateRoot    []byte
-	BlockNumber  uint64
+	StateRoot    types.Hash
+	BlockNumber  types.BlockNumber
 	Timestamp    time.Time
 	Changes      []*StateChange
 	Proof        *types.StateProof
@@ -32,7 +32,7 @@ func NewStateCommitter(state *State) *StateCommitter {
 }
 
 // CommitState commits a state change
-func (sc *StateCommitter) CommitState(blockNumber uint64, changes []*StateChange) *StateCommitment {
+func (sc *StateCommitter) CommitState(blockNumber types.BlockNumber, changes []*StateChange) *StateCommitment {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
@@ -58,7 +58,7 @@ func (sc *StateCommitter) CommitState(blockNumber uint64, changes []*StateChange
 }
 
 // calculateStateRoot calculates the state root
-func (sc *StateCommitter) calculateStateRoot() []byte {
+func (sc *StateCommitter) calculateStateRoot() types.Hash {
 	verifier := NewStateVerifier(sc.state)
 	return verifier.calculateStateRoot()
 }
@@ -98,7 +98,7 @@ func (sc *StateCommitter) getProofElementType(changeType StateChangeType) types.
 }
 
 // GetCommitment gets a commitment by block number
-func (sc *StateCommitter) GetCommitment(blockNumber uint64) *StateCommitment {
+func (sc *StateCommitter) GetCommitment(blockNumber types.BlockNumber) *StateCommitment {
 	sc.mu.RLock()
 	defer sc.mu.RUnlock()
 
@@ -142,7 +142,7 @@ func (sc *StateCommitter) verifyChange(change *StateChange) bool {
 		if err != nil {
 			return false
 		}
-		return account.Balance == change.NewValue.(uint64)
+		return account.Balance == change.NewValue.(types.Value)
 	case StateChangeTypeStorage:
 		value, err := sc.state.GetStorage([]byte(change.Address), []byte(change.StorageKey))
 		if err != nil {
@@ -160,13 +160,13 @@ func (sc *StateCommitter) verifyChange(change *StateChange) bool {
 		if err != nil {
 			return false
 		}
-		return account.Balance == change.NewValue.(uint64)
+		return account.Balance == change.NewValue.(types.Value)
 	case StateChangeTypeNonce:
 		account, err := sc.state.GetAccount(change.Address)
 		if err != nil {
 			return false
 		}
-		return account.Nonce == change.NewValue.(uint64)
+		return account.Nonce == change.NewValue.(types.Nonce)
 	default:
 		return false
 	}

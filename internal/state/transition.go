@@ -1,8 +1,6 @@
 package state
 
 import (
-	"crypto/sha256"
-	"encoding/binary"
 	"sync"
 
 	"github.com/CrossDAG/BlazeDAG/internal/types"
@@ -10,19 +8,18 @@ import (
 
 // StateTransition represents a state transition
 type StateTransition struct {
-	PreState  *State
-	PostState *State
-	Changes   []*StateChange
-	Root      []byte
+	BlockNumber types.BlockNumber
+	Changes     []*StateChange
+	Proof       *types.StateProof
 }
 
-// StateChange represents a change to the state
+// StateChange represents a state change
 type StateChange struct {
-	Address    string
 	Type       StateChangeType
+	Address    string
+	StorageKey string
 	OldValue   interface{}
 	NewValue   interface{}
-	StorageKey string
 }
 
 // StateChangeType represents the type of state change
@@ -36,100 +33,97 @@ const (
 	StateChangeTypeNonce
 )
 
-// StateTransitionManager manages state transitions
+// StateTransitionManager handles state transitions
 type StateTransitionManager struct {
 	transitions []*StateTransition
+	state       *State
 	mu          sync.RWMutex
 }
 
 // NewStateTransitionManager creates a new state transition manager
-func NewStateTransitionManager() *StateTransitionManager {
+func NewStateTransitionManager(state *State) *StateTransitionManager {
 	return &StateTransitionManager{
 		transitions: make([]*StateTransition, 0),
+		state:      state,
 	}
 }
 
 // CreateTransition creates a new state transition
-func (stm *StateTransitionManager) CreateTransition(preState *State, changes []*StateChange) *StateTransition {
+func (stm *StateTransitionManager) CreateTransition(blockNumber types.BlockNumber) *StateTransition {
 	stm.mu.Lock()
 	defer stm.mu.Unlock()
 
-	// Create post state by applying changes
-	postState := preState.Copy()
-	for _, change := range changes {
-		stm.applyChange(postState, change)
-	}
-
-	// Calculate state root
-	root := stm.calculateStateRoot(postState)
-
 	transition := &StateTransition{
-		PreState:  preState,
-		PostState: postState,
-		Changes:   changes,
-		Root:      root,
+		BlockNumber: blockNumber,
+		Changes:     make([]*StateChange, 0),
 	}
 
 	stm.transitions = append(stm.transitions, transition)
+
 	return transition
 }
 
-// applyChange applies a state change to the state
-func (stm *StateTransitionManager) applyChange(state *State, change *StateChange) {
+// ApplyChange applies a state change
+func (stm *StateTransitionManager) ApplyChange(transition *StateTransition, change *StateChange) error {
+	stm.mu.Lock()
+	defer stm.mu.Unlock()
+
+	// Apply change
 	switch change.Type {
 	case StateChangeTypeAccount:
-		account := &types.Account{
-			Address: []byte(change.Address),
-			Balance: change.NewValue.(uint64),
+		account, err := stm.state.GetAccount(change.Address)
+		if err != nil {
+			return err
 		}
-		state.SetAccount(change.Address, account)
+		account.Balance = change.NewValue.(types.Value)
+		stm.state.SetAccount(change.Address, account)
 	case StateChangeTypeStorage:
-		state.SetStorage([]byte(change.Address), []byte(change.StorageKey), change.NewValue.([]byte))
+		err := stm.state.SetStorage([]byte(change.Address), []byte(change.StorageKey), change.NewValue.([]byte))
+		if err != nil {
+			return err
+		}
 	case StateChangeTypeCode:
-		state.SetCode([]byte(change.Address), change.NewValue.([]byte))
+		err := stm.state.SetCode([]byte(change.Address), change.NewValue.([]byte))
+		if err != nil {
+			return err
+		}
 	case StateChangeTypeBalance:
-		account, _ := state.GetAccount(change.Address)
-		if account != nil {
-			account.Balance = change.NewValue.(uint64)
-			state.SetAccount(change.Address, account)
+		account, err := stm.state.GetAccount(change.Address)
+		if err != nil {
+			return err
 		}
+		account.Balance = change.NewValue.(types.Value)
+		stm.state.SetAccount(change.Address, account)
 	case StateChangeTypeNonce:
-		account, _ := state.GetAccount(change.Address)
-		if account != nil {
-			account.Nonce = change.NewValue.(uint64)
-			state.SetAccount(change.Address, account)
+		account, err := stm.state.GetAccount(change.Address)
+		if err != nil {
+			return err
 		}
-	}
-}
-
-// calculateStateRoot calculates the state root
-func (stm *StateTransitionManager) calculateStateRoot(state *State) []byte {
-	// Create a hash of the state
-	h := sha256.New()
-
-	// Hash accounts
-	for addr, account := range state.accounts {
-		h.Write([]byte(addr))
-		binary.Write(h, binary.LittleEndian, account.Balance)
-		binary.Write(h, binary.LittleEndian, account.Nonce)
-		h.Write(account.Code)
+		account.Nonce = change.NewValue.(types.Nonce)
+		stm.state.SetAccount(change.Address, account)
 	}
 
-	return h.Sum(nil)
+	// Add change to transition
+	transition.Changes = append(transition.Changes, change)
+
+	return nil
 }
 
-// GetTransition returns a state transition by index
-func (stm *StateTransitionManager) GetTransition(index int) *StateTransition {
+// GetTransition gets a transition by block number
+func (stm *StateTransitionManager) GetTransition(blockNumber types.BlockNumber) *StateTransition {
 	stm.mu.RLock()
 	defer stm.mu.RUnlock()
 
-	if index < 0 || index >= len(stm.transitions) {
-		return nil
+	for _, transition := range stm.transitions {
+		if transition.BlockNumber == blockNumber {
+			return transition
+		}
 	}
-	return stm.transitions[index]
+
+	return nil
 }
 
-// GetLatestTransition returns the latest state transition
+// GetLatestTransition gets the latest transition
 func (stm *StateTransitionManager) GetLatestTransition() *StateTransition {
 	stm.mu.RLock()
 	defer stm.mu.RUnlock()
@@ -137,61 +131,59 @@ func (stm *StateTransitionManager) GetLatestTransition() *StateTransition {
 	if len(stm.transitions) == 0 {
 		return nil
 	}
+
 	return stm.transitions[len(stm.transitions)-1]
 }
 
-// VerifyTransition verifies a state transition
+// VerifyTransition verifies a transition
 func (stm *StateTransitionManager) VerifyTransition(transition *StateTransition) bool {
-	// Verify pre-state matches
-	if !transition.PreState.Equal(transition.PreState) {
+	if transition == nil {
 		return false
 	}
 
-	// Verify changes were applied correctly
+	// Verify each change
 	for _, change := range transition.Changes {
-		if !stm.verifyChange(transition.PostState, change) {
+		if !stm.verifyChange(change) {
 			return false
 		}
 	}
 
-	// Verify state root
-	calculatedRoot := stm.calculateStateRoot(transition.PostState)
-	return string(calculatedRoot) == string(transition.Root)
+	return true
 }
 
 // verifyChange verifies a state change
-func (stm *StateTransitionManager) verifyChange(state *State, change *StateChange) bool {
+func (stm *StateTransitionManager) verifyChange(change *StateChange) bool {
 	switch change.Type {
 	case StateChangeTypeAccount:
-		account, err := state.GetAccount(change.Address)
+		account, err := stm.state.GetAccount(change.Address)
 		if err != nil {
 			return false
 		}
-		return account.Balance == change.NewValue.(uint64)
+		return account.Balance == change.NewValue.(types.Value)
 	case StateChangeTypeStorage:
-		value, err := state.GetStorage([]byte(change.Address), []byte(change.StorageKey))
+		value, err := stm.state.GetStorage([]byte(change.Address), []byte(change.StorageKey))
 		if err != nil {
 			return false
 		}
 		return string(value) == string(change.NewValue.([]byte))
 	case StateChangeTypeCode:
-		code, err := state.GetCode([]byte(change.Address))
+		code, err := stm.state.GetCode([]byte(change.Address))
 		if err != nil {
 			return false
 		}
 		return string(code) == string(change.NewValue.([]byte))
 	case StateChangeTypeBalance:
-		account, err := state.GetAccount(change.Address)
+		account, err := stm.state.GetAccount(change.Address)
 		if err != nil {
 			return false
 		}
-		return account.Balance == change.NewValue.(uint64)
+		return account.Balance == change.NewValue.(types.Value)
 	case StateChangeTypeNonce:
-		account, err := state.GetAccount(change.Address)
+		account, err := stm.state.GetAccount(change.Address)
 		if err != nil {
 			return false
 		}
-		return account.Nonce == change.NewValue.(uint64)
+		return account.Nonce == change.NewValue.(types.Nonce)
 	default:
 		return false
 	}

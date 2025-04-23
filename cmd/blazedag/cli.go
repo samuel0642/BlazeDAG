@@ -2,18 +2,14 @@ package main
 
 import (
 	"bufio"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/CrossDAG/BlazeDAG/internal/consensus"
@@ -45,20 +41,21 @@ type CLI struct {
 	dataDir         string
 	logger          *log.Logger
 	mempool         *core.Mempool
+	nodeID          types.Address
 }
 
-func NewCLI() *CLI {
+func NewCLI(isValidator bool, nodeID types.Address) *CLI {
 	return &CLI{
 		accounts:    make(map[string]*types.Account),
 		currentWave: 0,
 		dataDir:     dataDir,
 		mempool:     core.NewMempool(),
+		isValidator: isValidator,
+		nodeID:      nodeID,
 	}
 }
 
-func (cli *CLI) Start(port int, isValidator bool) error {
-	cli.isValidator = isValidator
-
+func (cli *CLI) Start(port int) error {
 	// Create data directory if it doesn't exist
 	if err := os.MkdirAll(cli.dataDir, 0755); err != nil {
 		return fmt.Errorf("failed to create data directory: %v", err)
@@ -71,7 +68,7 @@ func (cli *CLI) Start(port int, isValidator bool) error {
 		return fmt.Errorf("failed to open log file: %v", err)
 	}
 	cli.logger = log.New(logFile, "", log.LstdFlags)
-	cli.logger.Printf("Starting BlazeDAG node on port %d (Validator: %v)", port, isValidator)
+	cli.logger.Printf("Starting BlazeDAG node on port %d (Validator: %v)", port, cli.isValidator)
 
 	// Load saved state
 	if err := cli.loadState(); err != nil {
@@ -112,15 +109,20 @@ func (cli *CLI) Start(port int, isValidator bool) error {
 	cli.logger.Printf("EVM executor initialized")
 
 	// Create consensus engine
-	consensusEngine := consensus.NewConsensusEngine(dag, stateManager, evm, isValidator)
-	if err := consensusEngine.Start(); err != nil {
+	cli.consensusEngine = consensus.NewConsensusEngine(
+		cli.dag,
+		cli.stateManager,
+		cli.evm,
+		cli.isValidator,
+		cli.nodeID,
+	)
+	if err := cli.consensusEngine.Start(); err != nil {
 		return fmt.Errorf("failed to start consensus engine: %v", err)
 	}
-	cli.consensusEngine = consensusEngine
 	cli.logger.Printf("Consensus engine started")
 
 	// Create wave controller
-	waveController := consensus.NewWaveController(consensusEngine)
+	waveController := consensus.NewWaveController(cli.consensusEngine)
 	if err := waveController.Start(); err != nil {
 		return fmt.Errorf("failed to start wave controller: %v", err)
 	}
@@ -214,18 +216,18 @@ func (cli *CLI) registerMessageHandlers() {
 			return fmt.Errorf("failed to unmarshal block: %v", err)
 		}
 		cli.logger.Printf("Received block: %s (Height: %d, Wave: %d)", 
-			block.Hash(), block.Header.Height, block.Header.Wave)
+			block.ComputeHash(), block.Header.Height, block.Header.Wave)
 		return cli.consensusEngine.HandleBlock(&block)
 	})
 
 	cli.msgHandler.RegisterHandler(network.MessageTypeVote, func(msg *network.Message) error {
-		var vote consensus.Vote
+		var vote types.Vote
 		if err := msg.UnmarshalPayload(&vote); err != nil {
 			cli.logger.Printf("Error: Failed to unmarshal vote: %v", err)
 			return fmt.Errorf("failed to unmarshal vote: %v", err)
 		}
 		cli.logger.Printf("Received vote for block: %s from validator: %s", 
-			vote.BlockHash, hex.EncodeToString(vote.Validator))
+			hex.EncodeToString(vote.BlockHash), string(vote.Validator))
 		return cli.consensusEngine.HandleVote(&vote)
 	})
 
@@ -366,7 +368,7 @@ func (cli *CLI) printBlocks() {
 
 	fmt.Printf("Recent Blocks (%d):\n", len(blocks))
 	for _, block := range blocks {
-		fmt.Printf("  - Hash: %s\n", block.Hash())
+		fmt.Printf("  - Hash: %s\n", block.ComputeHash())
 		fmt.Printf("    Height: %d\n", block.Header.Height)
 		fmt.Printf("    Wave: %d\n", block.Header.Wave)
 		fmt.Printf("    Timestamp: %s\n", block.Timestamp.Format(time.RFC3339))
@@ -402,7 +404,7 @@ func (cli *CLI) printBlockDetails(hash string) {
 	}
 
 	fmt.Printf("Block Details:\n")
-	fmt.Printf("  Hash: %s\n", block.Hash())
+	fmt.Printf("  Hash: %s\n", block.ComputeHash())
 	fmt.Printf("  Height: %d\n", block.Header.Height)
 	fmt.Printf("  Wave: %d\n", block.Header.Wave)
 	fmt.Printf("  Timestamp: %s\n", block.Timestamp.Format(time.RFC3339))
@@ -413,9 +415,9 @@ func (cli *CLI) printBlockDetails(hash string) {
 	if len(block.Body.Transactions) > 0 {
 		fmt.Printf("\nTransactions:\n")
 		for i, tx := range block.Body.Transactions {
-			fmt.Printf("  %d. Hash: %s\n", i+1, hex.EncodeToString(tx.Hash()))
-			fmt.Printf("     From: %s\n", hex.EncodeToString(tx.From))
-			fmt.Printf("     To: %s\n", hex.EncodeToString(tx.To))
+			fmt.Printf("  %d. Hash: %s\n", i+1, hex.EncodeToString(tx.ComputeHash()))
+			fmt.Printf("     From: %s\n", string(tx.From))
+			fmt.Printf("     To: %s\n", string(tx.To))
 			fmt.Printf("     Amount: %d\n", tx.Value)
 			fmt.Printf("     Nonce: %d\n", tx.Nonce)
 		}
@@ -430,8 +432,8 @@ func (cli *CLI) createNewAccount() {
 	}
 
 	account := &types.Account{
-		Address: addr,
-		Balance: 1000000, // Give initial balance
+		Address: types.Address(hex.EncodeToString(addr)),
+		Balance: types.Value(1000000), // Give initial balance
 		Nonce:   0,
 	}
 	cli.accounts[hex.EncodeToString(addr)] = account
@@ -479,7 +481,7 @@ func (cli *CLI) sendTransaction(from, to, amountStr string) {
 	}
 
 	// Check balance
-	if sender.Balance < amount {
+	if sender.Balance < types.Value(amount) {
 		cli.logger.Printf("Error: Insufficient balance for %s: %d < %d", 
 			from, sender.Balance, amount)
 		fmt.Printf("Insufficient balance: %d < %d\n", sender.Balance, amount)
@@ -488,30 +490,28 @@ func (cli *CLI) sendTransaction(from, to, amountStr string) {
 
 	// Create transaction
 	tx := &types.Transaction{
-		From:     []byte(from),
-		To:       []byte(to),
-		Value:    amount,
-		Nonce:    sender.Nonce,
-		GasPrice: 1,
-		GasLimit: 21000,
-		Data:     nil,
+		From:   types.Address(from),
+		To:     types.Address(to),
+		Value:  types.Value(amount),
+		Nonce:  sender.Nonce,
+		Data:   nil,
 	}
 
 	// Add transaction to mempool
 	cli.mempool.AddTransaction(tx)
-	cli.logger.Printf("Added transaction to mempool: %s", hex.EncodeToString(tx.Hash()))
+	cli.logger.Printf("Added transaction to mempool: %s", hex.EncodeToString(tx.ComputeHash()))
 
 	// Update balances
-	sender.Balance -= amount
+	sender.Balance -= types.Value(amount)
 	if recipient, ok := cli.accounts[to]; ok {
-		recipient.Balance += amount
+		recipient.Balance += types.Value(amount)
 		cli.logger.Printf("Updated existing recipient account %s balance: %d", 
 			to, recipient.Balance)
 	} else {
 		// Create recipient account if it doesn't exist
 		recipient := &types.Account{
-			Address: []byte(to),
-			Balance: amount,
+			Address: types.Address(to),
+			Balance: types.Value(amount),
 			Nonce:   0,
 		}
 		cli.accounts[to] = recipient
@@ -530,7 +530,7 @@ func (cli *CLI) sendTransaction(from, to, amountStr string) {
 		return
 	}
 
-	txHash := hex.EncodeToString(tx.Hash())
+	txHash := hex.EncodeToString(tx.ComputeHash())
 	fmt.Printf("Transaction sent: %s\n", txHash)
 	cli.logger.Printf("Transaction sent: %s (From: %s, To: %s, Amount: %d)", 
 		txHash, from, to, amount)
@@ -562,24 +562,34 @@ func (cli *CLI) createBlock() {
 		blockTxs[i] = *tx
 	}
 
+	// Get latest block hash
+	latestBlock, err := cli.dag.GetBlockByHeight(cli.dag.GetHeight())
+	if err != nil {
+		cli.logger.Printf("Error: Failed to get latest block: %v", err)
+		fmt.Printf("Failed to get latest block: %v\n", err)
+		return
+	}
+
 	// Create block
 	block := &types.Block{
-		Header: types.BlockHeader{
+		Header: &types.BlockHeader{
 			Version:    1,
-			Round:      cli.currentWave,
-			Wave:       cli.currentWave,
+			Round:      types.Round(cli.currentWave),
+			Wave:       types.Wave(cli.currentWave),
 			Height:     cli.dag.GetHeight() + 1,
-			ParentHash: cli.dag.GetLatestBlockHash(),
+			ParentHash: []byte(latestBlock.ComputeHash()),
+			StateRoot:  nil, // TODO: Calculate state root
+			Validator:  []byte(cli.nodeID),
+			Timestamp:  time.Now(),
 		},
-		Body: types.BlockBody{
+		Body: &types.BlockBody{
 			Transactions: blockTxs,
+			Receipts:    make([]types.Receipt, 0),
+			Events:      make([]types.Event, 0),
+			References:  make([]types.Reference, 0),
 		},
 		Timestamp: time.Now(),
 	}
-
-	// Sign block
-	blockHash := sha256.Sum256([]byte(block.Hash()))
-	block.Signature = blockHash[:]
 
 	// Add block to DAG
 	if err := cli.dag.AddBlock(block); err != nil {
@@ -599,7 +609,7 @@ func (cli *CLI) createBlock() {
 		return
 	}
 
-	blockHashStr := block.Hash()
+	blockHashStr := block.ComputeHash()
 	fmt.Printf("Block created and broadcast: %s\n", blockHashStr)
 	cli.logger.Printf("Block created and broadcast: %s (Height: %d, Wave: %d, Transactions: %d)", 
 		blockHashStr, block.Header.Height, block.Header.Wave, len(txs))
@@ -610,29 +620,39 @@ func (cli *CLI) createBlock() {
 	}
 }
 
-func main() {
-	// Parse command line flags
-	port := flag.Int("port", 3000, "Port to listen on")
-	isValidator := flag.Bool("validator", false, "Whether this node is a validator")
-	flag.Parse()
-
-	// Create and start CLI
-	cli := NewCLI()
-	if err := cli.Start(*port, *isValidator); err != nil {
-		log.Fatalf("Failed to start CLI: %v", err)
+func (cli *CLI) handleVote(args []string) error {
+	if len(args) != 5 {
+		return fmt.Errorf("usage: vote <proposal_id> <block_hash> <wave> <round> <validator>")
 	}
-	defer cli.Stop()
 
-	// Handle shutdown signals
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		fmt.Println("\nShutting down...")
-		cli.Stop()
-		os.Exit(0)
-	}()
+	proposalID := make(types.Hash, 32)
+	if _, err := hex.Decode(proposalID[:], []byte(args[0])); err != nil {
+		return fmt.Errorf("invalid proposal ID: %v", err)
+	}
 
-	// Run CLI
-	cli.Run()
+	blockHash := make(types.Hash, 32)
+	if _, err := hex.Decode(blockHash[:], []byte(args[1])); err != nil {
+		return fmt.Errorf("invalid block hash: %v", err)
+	}
+
+	wave, err := strconv.ParseUint(args[2], 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid wave number: %v", err)
+	}
+	round, err := strconv.ParseUint(args[3], 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid round number: %v", err)
+	}
+	validator := args[4]
+
+	vote := &types.Vote{
+		ProposalID: proposalID,
+		BlockHash:  blockHash,
+		Wave:       types.Wave(wave),
+		Round:      types.Round(round),
+		Validator:  types.Address(validator),
+		Timestamp:  time.Now(),
+	}
+
+	return cli.consensusEngine.HandleVote(vote)
 } 
