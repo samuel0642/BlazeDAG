@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"sync"
+
+	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
 // LeaderSelector handles leader selection for waves
@@ -27,7 +29,7 @@ func NewLeaderSelector(validators []string) *LeaderSelector {
 }
 
 // SelectLeader selects a leader for the given wave number
-func (ls *LeaderSelector) SelectLeader(waveNumber int, committedBlocks []string) string {
+func (ls *LeaderSelector) SelectLeader(waveNumber types.Wave, committedBlocks []string) string {
 	ls.mu.RLock()
 	defer ls.mu.RUnlock()
 

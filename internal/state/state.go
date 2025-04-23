@@ -62,7 +62,7 @@ func (s *State) UpdateAccount(address string, account *types.Account) error {
 }
 
 // BatchUpdateBalances updates multiple account balances in a batch
-func (s *State) BatchUpdateBalances(updates map[string]uint64) error {
+func (s *State) BatchUpdateBalances(updates map[string]types.Value) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -124,12 +124,12 @@ func (s *State) ExecuteTransaction(tx *types.Transaction) error {
 	}
 
 	// Check sender's balance
-	if sender.Balance < tx.Value {
+	if uint64(sender.Balance) < uint64(tx.Value) {
 		return errors.New("insufficient balance")
 	}
 
 	// Check sender's nonce
-	if sender.Nonce != tx.Nonce {
+	if uint64(sender.Nonce) != uint64(tx.Nonce) {
 		return errors.New("invalid nonce")
 	}
 
@@ -139,16 +139,16 @@ func (s *State) ExecuteTransaction(tx *types.Transaction) error {
 	if !exists {
 		recipient = &types.Account{
 			Address: tx.To,
-			Balance: 0,
-			Nonce:   0,
+			Balance: types.Value(0),
+			Nonce:   types.Nonce(0),
 		}
 		s.accounts[recipientAddr] = recipient
 		s.storage[recipientAddr] = make(map[string][]byte)
 	}
 
 	// Update balances
-	sender.Balance -= tx.Value
-	recipient.Balance += tx.Value
+	sender.Balance = types.Value(uint64(sender.Balance) - uint64(tx.Value))
+	recipient.Balance = types.Value(uint64(recipient.Balance) + uint64(tx.Value))
 
 	// Update sender's nonce
 	sender.Nonce++
@@ -207,191 +207,109 @@ func (s *State) Copy() *State {
 	return newState
 }
 
-// StateManager manages the blockchain state
-type StateManager struct {
-	state *State
-	mu    sync.RWMutex
-}
-
-// NewStateManager creates a new state manager
-func NewStateManager() *StateManager {
-	return &StateManager{
-		state: NewState(),
-	}
-}
-
-// GetAccount retrieves an account by address
-func (sm *StateManager) GetAccount(address string) (*types.Account, error) {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	return sm.state.GetAccount(address)
-}
-
-// SetAccount sets an account in the state
-func (sm *StateManager) SetAccount(address string, account *types.Account) error {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	sm.state.SetAccount(address, account)
-	return nil
-}
-
-// UpdateAccount updates an account in the state
-func (sm *StateManager) UpdateAccount(address string, account *types.Account) error {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	return sm.state.UpdateAccount(address, account)
-}
-
-// ExecuteTransaction executes a transaction and updates the state
-func (sm *StateManager) ExecuteTransaction(tx *types.Transaction) error {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	return sm.state.ExecuteTransaction(tx)
-}
-
 // GetState returns the current state
-func (sm *StateManager) GetState() *State {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	return sm.state
+func (s *State) GetState() *State {
+	return s
 }
 
 // CreateAccount creates a new account
-func (sm *StateManager) CreateAccount(address []byte, balance uint64) error {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+func (s *State) CreateAccount(address []byte, balance types.Value) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	account := &types.Account{
-		Address: address,
+	addr := string(address)
+	if _, exists := s.accounts[addr]; exists {
+		return errors.New("account already exists")
+	}
+
+	s.accounts[addr] = &types.Account{
+		Address: types.Address(address),
 		Balance: balance,
 		Nonce:   0,
 	}
-	sm.state.SetAccount(string(address), account)
+	s.storage[addr] = make(map[string][]byte)
 	return nil
 }
 
 // UpdateBalance updates an account's balance
-func (sm *StateManager) UpdateBalance(address []byte, balance uint64) error {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+func (s *State) UpdateBalance(address []byte, balance types.Value) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	account, err := sm.state.GetAccount(string(address))
-	if err != nil {
-		return err
+	addr := string(address)
+	account, exists := s.accounts[addr]
+	if !exists {
+		return errors.New("account not found")
 	}
+
 	account.Balance = balance
-	sm.state.SetAccount(string(address), account)
 	return nil
 }
 
 // UpdateNonce updates an account's nonce
-func (sm *StateManager) UpdateNonce(address []byte, nonce uint64) error {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+func (s *State) UpdateNonce(address []byte, nonce types.Nonce) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	account, err := sm.state.GetAccount(string(address))
-	if err != nil {
-		return err
+	addr := string(address)
+	account, exists := s.accounts[addr]
+	if !exists {
+		return errors.New("account not found")
 	}
+
 	account.Nonce = nonce
-	sm.state.SetAccount(string(address), account)
 	return nil
 }
 
-// SetStorage sets a storage value for an account
-func (sm *StateManager) SetStorage(address, key, value []byte) error {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	return sm.state.SetStorage(address, key, value)
-}
-
-// GetStorage retrieves a storage value for an account
-func (sm *StateManager) GetStorage(address, key []byte) ([]byte, error) {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	return sm.state.GetStorage(address, key)
-}
-
 // SetCode sets the code for an account
-func (sm *StateManager) SetCode(address, code []byte) error {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+func (s *State) SetCode(address []byte, code []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	account, err := sm.state.GetAccount(string(address))
-	if err != nil {
-		return err
+	addr := string(address)
+	if _, exists := s.accounts[addr]; !exists {
+		return errors.New("account not found")
 	}
-	account.Code = code
-	return sm.state.UpdateAccount(string(address), account)
+
+	s.storage[addr]["code"] = code
+	return nil
 }
 
-// GetCode retrieves the code for an account
+// GetCode gets the code for an account
 func (s *State) GetCode(address []byte) ([]byte, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	addr := string(address)
 	if _, exists := s.accounts[addr]; !exists {
-		return nil, ErrAccountNotFound
+		return nil, errors.New("account not found")
 	}
 
-	// TODO: Implement code storage and retrieval
+	if code, exists := s.storage[addr]["code"]; exists {
+		return code, nil
+	}
 	return nil, nil
-}
-
-// SetCode sets the code for an account
-func (s *State) SetCode(address, code []byte) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	addr := string(address)
-	if _, exists := s.accounts[addr]; !exists {
-		return ErrAccountNotFound
-	}
-
-	// TODO: Implement code storage
-	return nil
 }
 
 // Equal checks if two states are equal
 func (s *State) Equal(other *State) bool {
 	s.mu.RLock()
+	other.mu.RLock()
 	defer s.mu.RUnlock()
+	defer other.mu.RUnlock()
 
-	// Check accounts
 	if len(s.accounts) != len(other.accounts) {
 		return false
 	}
+
 	for addr, account := range s.accounts {
 		otherAccount, exists := other.accounts[addr]
 		if !exists {
 			return false
 		}
-		if account.Balance != otherAccount.Balance || account.Nonce != otherAccount.Nonce {
+		if uint64(account.Balance) != uint64(otherAccount.Balance) ||
+			uint64(account.Nonce) != uint64(otherAccount.Nonce) {
 			return false
-		}
-	}
-
-	// Check storage
-	if len(s.storage) != len(other.storage) {
-		return false
-	}
-	for addr, storage := range s.storage {
-		otherStorage, exists := other.storage[addr]
-		if !exists {
-			return false
-		}
-		if len(storage) != len(otherStorage) {
-			return false
-		}
-		for key, value := range storage {
-			otherValue, exists := otherStorage[key]
-			if !exists {
-				return false
-			}
-			if string(value) != string(otherValue) {
-				return false
-			}
 		}
 	}
 

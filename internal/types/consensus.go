@@ -1,97 +1,107 @@
 package types
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
+
+// Wave represents a consensus wave number
+type Wave uint64
 
 // ConsensusConfig holds the configuration for the consensus engine
 type ConsensusConfig struct {
-	// Wave timing parameters
 	WaveTimeout   time.Duration
 	RoundDuration time.Duration
-
-	// Validator parameters
-	ValidatorSet []string
-	QuorumSize   int
-
-	// Network parameters
-	ListenAddr string
-	Seeds     []string
+	ValidatorSet  []string
+	QuorumSize    int
+	ListenAddr    string
+	Seeds         []string
 }
 
-// Proposal represents a block proposal in the consensus
-type Proposal struct {
-	ID        []byte
-	Wave      uint64
-	Round     uint64
-	Block     *Block
-	Proposer  []byte
-	Timestamp time.Time
-	Status    ConsensusStatus
-}
-
-// Vote represents a validator's vote on a proposal
-type Vote struct {
-	ProposalID []byte
-	Wave       uint64
-	Round      uint64
-	Validator  []byte
-	Type       VoteType
-	Timestamp  time.Time
+// Validate checks if the consensus configuration is valid
+func (c *ConsensusConfig) Validate() error {
+	if c.WaveTimeout <= 0 {
+		return fmt.Errorf("wave timeout must be positive")
+	}
+	if c.RoundDuration <= 0 {
+		return fmt.Errorf("round duration must be positive")
+	}
+	if len(c.ValidatorSet) == 0 {
+		return fmt.Errorf("validator set cannot be empty")
+	}
+	if c.QuorumSize <= 0 || c.QuorumSize > len(c.ValidatorSet) {
+		return fmt.Errorf("invalid quorum size")
+	}
+	if c.ListenAddr == "" {
+		return fmt.Errorf("listen address cannot be empty")
+	}
+	return nil
 }
 
 // VoteType represents the type of vote
 type VoteType int
 
 const (
-	VoteTypeApprove VoteType = iota
-	VoteTypeReject
+	VoteTypeProposal VoteType = iota
+	VoteTypeCommit
+	VoteTypeAbort
 )
 
-// Complaint represents a complaint about a block
+func (v VoteType) String() string {
+	switch v {
+	case VoteTypeProposal:
+		return "Proposal"
+	case VoteTypeCommit:
+		return "Commit"
+	case VoteTypeAbort:
+		return "Abort"
+	default:
+		return "Unknown"
+	}
+}
+
+// Complaint represents a complaint against a validator
 type Complaint struct {
-	ID        []byte
-	BlockHash []byte
-	Validator []byte
-	Round     uint64
-	Wave      uint64
-	Timestamp time.Time
-	Reason    string
-	Signature []byte
+	Validator Address
+	Wave      Wave
+	Evidence  []byte
 }
 
-// WaveState represents the state of a wave
-type WaveState struct {
-	CurrentWave    uint64
-	WaveStartTime  time.Time
-	WaveEndTime    time.Time
-	Leader         []byte
-	Proposals      map[string]Proposal
-	Votes          map[string][]Vote
-	WaveStatus     WaveStatus
-	CommittedBlocks map[string]bool
-	PendingBlocks  map[string]bool
-	WaveTips       map[uint64]map[string]bool
-	CausalOrder    map[string]uint64
+// ConsensusStatus represents the current status of the consensus engine
+type ConsensusStatus struct {
+	CurrentWave Wave
+	IsLeader    bool
+	Leader      Address
+	WaveStatus  WaveStatus
 }
-
-// ConsensusStatus represents the status of a proposal
-type ConsensusStatus int
-
-const (
-	ConsensusStatusPending ConsensusStatus = iota
-	ConsensusStatusValidating
-	ConsensusStatusValid
-	ConsensusStatusInvalid
-	ConsensusStatusCertified
-	ConsensusStatusCommitted
-)
 
 // WaveStatus represents the status of a wave
 type WaveStatus int
 
 const (
-	WaveStatusInitializing WaveStatus = iota
-	WaveStatusActive
-	WaveStatusCompleting
-	WaveStatusCompleted
+	WaveStatusIdle WaveStatus = iota
+	WaveStatusProposing
+	WaveStatusVoting
+	WaveStatusCommitting
+	WaveStatusFinalized
 	WaveStatusFailed
-) 
+)
+
+func (w WaveStatus) String() string {
+	switch w {
+	case WaveStatusIdle:
+		return "Idle"
+	case WaveStatusProposing:
+		return "Proposing"
+	case WaveStatusVoting:
+		return "Voting"
+	case WaveStatusCommitting:
+		return "Committing"
+	case WaveStatusFinalized:
+		return "Finalized"
+	case WaveStatusFailed:
+		return "Failed"
+	default:
+		return "Unknown"
+	}
+}

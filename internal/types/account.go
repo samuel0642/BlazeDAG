@@ -2,30 +2,30 @@ package types
 
 // Account represents an account in the state
 type Account struct {
-	Address     []byte
-	Balance     uint64
-	Nonce       uint64
+	Address     Address
+	Balance     Value
+	Nonce       Nonce
 	Code        []byte
-	StorageRoot []byte
-	CodeHash    []byte
+	StorageRoot Hash
+	CodeHash    Hash
 }
 
 // NewAccount creates a new account
-func NewAccount(address []byte, balance uint64) *Account {
+func NewAccount(address Address, balance Value) *Account {
 	return &Account{
 		Address:     address,
 		Balance:     balance,
 		Nonce:       0,
 		Code:        nil,
-		StorageRoot: nil,
-		CodeHash:    nil,
+		StorageRoot: make(Hash, 0),
+		CodeHash:    make(Hash, 0),
 	}
 }
 
 // BalanceUpdate represents a balance update for an account
 type BalanceUpdate struct {
-	Address []byte
-	Balance uint64
+	Address Address
+	Balance Value
 }
 
 // Equal checks if two accounts are equal
