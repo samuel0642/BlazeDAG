@@ -117,7 +117,6 @@ type ConsensusEngine struct {
 	currentRound  types.Round
 	currentHeight types.BlockNumber
 	currentLeader types.Address
-	votes         map[string]map[types.Address]bool
 	config        *Config
 	proposals     map[string]*types.Proposal
 	validators    []types.Address
@@ -133,7 +132,6 @@ func NewConsensusEngine(dag *core.DAG, stateManager *state.StateManager, nodeID 
 		nodeID:        nodeID,
 		config:        config,
 		proposals:     make(map[string]*types.Proposal),
-		votes:         make(map[string]map[types.Address]bool),
 		validators:    make([]types.Address, 0),
 		waveManager:   NewWaveManager(config),
 		currentWave:   nil,
@@ -158,13 +156,7 @@ func (ce *ConsensusEngine) Start() error {
 	ce.logger.Printf("Initialized validator set with %d validators", len(ce.validators))
 
 	// Start with wave 0
-	ce.currentWave = &WaveState{
-		Number:    0,
-		StartTime: time.Now(),
-		EndTime:   time.Now().Add(ce.config.WaveTimeout),
-		Status:    types.WaveStatusProposing,
-		Votes:     make(map[types.Address]bool),
-	}
+	ce.currentWave = NewWaveState(0, ce.config.WaveTimeout, ce.config.QuorumSize)
 
 	// Select initial leader
 	ce.selectLeader()
@@ -185,11 +177,11 @@ func (ce *ConsensusEngine) waveTimer() {
 		time.Sleep(ce.config.WaveTimeout)
 		ce.mu.Lock()
 		if ce.currentWave != nil {
-			ce.logger.Printf("Wave %d timed out", ce.currentWave.Number)
-			ce.currentWave.Number++
+			ce.logger.Printf("Wave %d timed out", ce.currentWave.GetWaveNumber())
+			ce.currentWave = NewWaveState(ce.currentWave.GetWaveNumber()+1, ce.config.WaveTimeout, ce.config.QuorumSize)
 			ce.selectLeader()
 			ce.logger.Printf("Selected new leader for wave %d: %s", 
-				ce.currentWave.Number, ce.currentLeader)
+				ce.currentWave.GetWaveNumber(), ce.currentLeader)
 		}
 		ce.mu.Unlock()
 	}
@@ -203,10 +195,10 @@ func (ce *ConsensusEngine) selectLeader() {
 	}
 
 	// Select leader based on wave number
-	leaderIndex := int(ce.currentWave.Number) % len(ce.validators)
+	leaderIndex := int(ce.currentWave.GetWaveNumber()) % len(ce.validators)
 	ce.currentLeader = ce.validators[leaderIndex]
 	ce.logger.Printf("Selected leader %s for wave %d", 
-		ce.currentLeader, ce.currentWave.Number)
+		ce.currentLeader, ce.currentWave.GetWaveNumber())
 }
 
 // IsLeader checks if the current node is the leader
@@ -221,7 +213,7 @@ func (ce *ConsensusEngine) IsLeader() bool {
 	isLeader := ce.currentLeader == ce.nodeID
 	if isLeader {
 		ce.logger.Printf("Node %s is leader for wave %d", 
-			ce.nodeID, ce.currentWave.Number)
+			ce.nodeID, ce.currentWave.GetWaveNumber())
 	}
 	return isLeader
 }
@@ -233,7 +225,7 @@ func (ce *ConsensusEngine) GetCurrentWave() types.Wave {
 	if ce.currentWave == nil {
 		return 0
 	}
-	return ce.currentWave.Number
+	return ce.currentWave.GetWaveNumber()
 }
 
 // HandleBlock handles a block
@@ -248,64 +240,90 @@ func (ce *ConsensusEngine) HandleBlock(block *types.Block) error {
 	ce.logger.Printf("Processing block %s in wave %d, round %d", 
 		block.ComputeHash(), block.Header.Wave, block.Header.Round)
 
-	// Validate block
-	if err := ce.validateBlock(block); err != nil {
-		ce.logger.Printf("Block validation failed: %v", err)
-		return err
-	}
-
-	// Add block to DAG
-	if err := ce.dag.AddBlock(block); err != nil {
-		ce.logger.Printf("Failed to add block to DAG: %v", err)
-		return err
-	}
-
 	// Create proposal
 	proposal := &types.Proposal{
 		ID:        block.ComputeHash(),
 		BlockHash: block.ComputeHash(),
-		Wave:      block.Header.Wave,
-		Round:     block.Header.Round,
 		Block:     block,
-		Proposer:  types.Address(block.Header.Validator),
+		Proposer:  ce.nodeID,
 		Timestamp: time.Now(),
-		Status:    types.ProposalStatusPending,
 	}
 
-	// Handle proposal
-	ce.proposals[string(proposal.ID)] = proposal
-	ce.logger.Printf("Created proposal for block %s", proposal.ID)
+	// Add proposal to wave state
+	if err := ce.currentWave.AddProposal(proposal); err != nil {
+		return fmt.Errorf("failed to add proposal: %v", err)
+	}
+
 	return nil
 }
 
-// HandleVote handles a vote from a validator
-func (ce *ConsensusEngine) HandleVote(validator types.Address, proposalID string) error {
+// HandleVote handles a vote
+func (ce *ConsensusEngine) HandleVote(vote *types.Vote) error {
 	ce.mu.Lock()
 	defer ce.mu.Unlock()
 
-	if ce.currentWave == nil {
+	if !ce.running || ce.currentWave == nil {
 		return ErrNoActiveWave
 	}
 
-	ce.logger.Printf("Received vote from validator %s for proposal %s in wave %d", 
-		validator, proposalID, ce.currentWave.Number)
+	ce.logger.Printf("Processing vote for block %s from validator %s in wave %d, round %d",
+		vote.BlockHash, vote.Validator, vote.Wave, vote.Round)
 
-	// Initialize votes map for proposal if not exists
-	if _, exists := ce.votes[proposalID]; !exists {
-		ce.votes[proposalID] = make(map[types.Address]bool)
+	// Add vote to wave state
+	if err := ce.currentWave.AddProposalVote(vote); err != nil {
+		return fmt.Errorf("failed to add vote: %v", err)
 	}
 
-	// Record vote
-	ce.votes[proposalID][validator] = true
-
-	// Check if we have enough votes (2/3 + 1)
-	if ce.HasQuorum() {
-		ce.logger.Printf("Quorum reached for proposal %s in wave %d", 
-			proposalID, ce.currentWave.Number)
-		ce.currentWave.Number++
+	// Check for quorum
+	if ce.currentWave.HasQuorum(vote.ProposalID) {
+		ce.logger.Printf("Quorum reached for block %s", vote.BlockHash)
+		ce.currentWave.SetStatus(types.WaveStatusFinalized)
 	}
 
 	return nil
+}
+
+// HasQuorum checks if the current wave has reached quorum
+func (ce *ConsensusEngine) HasQuorum() bool {
+	ce.mu.RLock()
+	defer ce.mu.RUnlock()
+
+	if !ce.running || ce.currentWave == nil {
+		return false
+	}
+
+	// Get all proposals in the current wave
+	for _, proposal := range ce.currentWave.GetProposals() {
+		if ce.currentWave.HasQuorum(proposal.ID) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetValidators returns the list of validators
+func (ce *ConsensusEngine) GetValidators() []types.Address {
+	ce.mu.RLock()
+	defer ce.mu.RUnlock()
+	return ce.validators
+}
+
+// ProcessTimeout handles wave timeout
+func (ce *ConsensusEngine) ProcessTimeout() {
+	ce.mu.Lock()
+	defer ce.mu.Unlock()
+
+	if !ce.running || ce.currentWave == nil {
+		return
+	}
+
+	if ce.currentWave.IsTimedOut() {
+		ce.logger.Printf("Wave %d timed out", ce.currentWave.GetWaveNumber())
+		ce.currentWave.SetStatus(types.WaveStatusFailed)
+		ce.currentWave = NewWaveState(ce.currentWave.GetWaveNumber()+1, ce.config.WaveTimeout, ce.config.QuorumSize)
+		ce.selectLeader()
+	}
 }
 
 // HandleCertificate handles a certificate
@@ -476,14 +494,14 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 	}
 
 	ce.logger.Printf("Creating new block in wave %d, round %d", 
-		ce.currentWave.Number, ce.currentRound)
+		ce.currentWave.GetWaveNumber(), ce.currentRound)
 
 	// Create block header
 	header := &types.BlockHeader{
 		Version:    1,
 		Timestamp:  time.Now(),
 		Round:      ce.currentRound,
-		Wave:       ce.currentWave.Number,
+		Wave:       ce.currentWave.GetWaveNumber(),
 		Height:     ce.getNextHeight(),
 		ParentHash: ce.getParentHash(),
 		References: ce.selectReferences(),
@@ -511,7 +529,7 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 	}
 
 	ce.logger.Printf("Created block %s in wave %d, round %d", 
-		block.ComputeHash(), ce.currentWave.Number, ce.currentRound)
+		block.ComputeHash(), ce.currentWave.GetWaveNumber(), ce.currentRound)
 	return block, nil
 }
 
@@ -525,10 +543,10 @@ func (ce *ConsensusEngine) ProcessVote(validator types.Address, vote bool) error
 	}
 
 	ce.logger.Printf("Processing vote from validator %s in wave %d", 
-		validator, ce.currentWave.Number)
+		validator, ce.currentWave.GetWaveNumber())
 
 	// Record vote
-	ce.currentWave.Votes[validator] = vote
+	ce.currentWave.AddVote(validator)
 	ce.processVote(vote)
 
 	return nil
@@ -538,43 +556,6 @@ func (ce *ConsensusEngine) ProcessVote(validator types.Address, vote bool) error
 func (ce *ConsensusEngine) verifyVote(vote *types.Vote) error {
 	// TODO: Implement vote verification
 	return nil
-}
-
-// GetValidators gets all validators
-func (ce *ConsensusEngine) GetValidators() []types.Address {
-	ce.mu.RLock()
-	defer ce.mu.RUnlock()
-
-	validators := make([]types.Address, len(ce.validators))
-	copy(validators, ce.validators)
-	return validators
-}
-
-// ProcessTimeout handles wave timeout
-func (ce *ConsensusEngine) ProcessTimeout() {
-	ce.mu.Lock()
-	defer ce.mu.Unlock()
-
-	if ce.currentWave != nil {
-		ce.logger.Printf("Processing timeout for wave %d", ce.currentWave.Number)
-		ce.currentWave.Number = 0
-	}
-}
-
-// HasQuorum checks if there is a quorum of votes
-func (ce *ConsensusEngine) HasQuorum() bool {
-	validators := make(map[types.Address]bool)
-	for validator, voted := range ce.currentWave.Votes {
-		if voted {
-			validators[validator] = true
-		}
-	}
-	hasQuorum := len(validators) >= (2*ce.config.TotalValidators/3 + 1)
-	if hasQuorum {
-		ce.logger.Printf("Quorum reached with %d validators in wave %d", 
-			len(validators), ce.currentWave.Number)
-	}
-	return hasQuorum
 }
 
 // getNextHeight returns the next block height
@@ -627,7 +608,7 @@ func (ce *ConsensusEngine) createProposal() *types.Proposal {
 	return &types.Proposal{
 		Timestamp:  time.Now(),
 		Round:      ce.currentRound,
-		Wave:       ce.currentWave.Number,
+		Wave:       ce.currentWave.GetWaveNumber(),
 		BlockHash:  ce.getParentHash(),
 		Proposer:   ce.nodeID,
 	}
@@ -635,21 +616,15 @@ func (ce *ConsensusEngine) createProposal() *types.Proposal {
 
 func (ce *ConsensusEngine) processVote(vote bool) {
 	if vote {
-		ce.currentWave.Status = types.WaveStatusProposing
+		ce.currentWave.SetStatus(types.WaveStatusProposing)
 	} else {
-		ce.currentWave.Status = types.WaveStatusFailed
+		ce.currentWave.SetStatus(types.WaveStatusFailed)
 	}
 
 	// Check if we have enough votes (2/3 + 1)
-	validators := make(map[types.Address]bool)
-	for validator, voted := range ce.currentWave.Votes {
-		if voted {
-			validators[validator] = true
-		}
-	}
-
+	validators := ce.currentWave.GetVotes()
 	if len(validators) >= (2*ce.config.TotalValidators/3 + 1) {
-		ce.currentWave.Status = types.WaveStatusFinalized
+		ce.currentWave.SetStatus(types.WaveStatusFinalized)
 	}
 }
 
@@ -665,4 +640,18 @@ func (ce *ConsensusEngine) resetWave() {
 		ce.currentWave.Number = 0
 		ce.currentWave.Status = types.WaveStatusProposing
 	}
+}
+
+// GetRecentBlocks returns the most recent blocks
+func (ce *ConsensusEngine) GetRecentBlocks(count int) []*types.Block {
+	ce.mu.RLock()
+	defer ce.mu.RUnlock()
+	return ce.dag.GetRecentBlocks(count)
+}
+
+// GetBlock returns a block by its hash
+func (ce *ConsensusEngine) GetBlock(hash types.Hash) (*types.Block, error) {
+	ce.mu.RLock()
+	defer ce.mu.RUnlock()
+	return ce.dag.GetBlock(hash)
 } 

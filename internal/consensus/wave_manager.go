@@ -61,7 +61,7 @@ func (wm *WaveManager) StartNewWave() (*WaveState, error) {
 	wm.mu.Lock()
 	defer wm.mu.Unlock()
 
-	wave := NewWaveState(wm.engine.GetCurrentWave(), wm.timeout)
+	wave := NewWaveState(wm.engine.GetCurrentWave(), wm.timeout, wm.engine.config.QuorumSize)
 	return wave, nil
 }
 
