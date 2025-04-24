@@ -10,7 +10,7 @@ import (
 
 // NetworkLayer represents the network communication layer
 type NetworkLayer struct {
-    peers    map[string]*Peer
+    peers    map[types.Address]*types.Peer
     messages chan *types.NetworkMessage
     mu       sync.RWMutex
 }
@@ -18,7 +18,7 @@ type NetworkLayer struct {
 // NewNetworkLayer creates a new network layer
 func NewNetworkLayer() *NetworkLayer {
     return &NetworkLayer{
-        peers:    make(map[string]*Peer),
+        peers:    make(map[types.Address]*types.Peer),
         messages: make(chan *types.NetworkMessage, 1000),
     }
 }
@@ -35,25 +35,25 @@ func (l *NetworkLayer) Stop() error {
 }
 
 // AddPeer adds a peer to the network layer
-func (l *NetworkLayer) AddPeer(peer *Peer) {
+func (l *NetworkLayer) AddPeer(peer *types.Peer) {
     l.mu.Lock()
     defer l.mu.Unlock()
-    l.peers[peer.ID] = peer
+    l.peers[peer.Address] = peer
 }
 
 // RemovePeer removes a peer from the network layer
-func (l *NetworkLayer) RemovePeer(peerID string) {
+func (l *NetworkLayer) RemovePeer(address types.Address) {
     l.mu.Lock()
     defer l.mu.Unlock()
-    delete(l.peers, peerID)
+    delete(l.peers, address)
 }
 
 // GetPeers returns all peers
-func (l *NetworkLayer) GetPeers() []*Peer {
+func (l *NetworkLayer) GetPeers() []*types.Peer {
     l.mu.RLock()
     defer l.mu.RUnlock()
 
-    peers := make([]*Peer, 0, len(l.peers))
+    peers := make([]*types.Peer, 0, len(l.peers))
     for _, peer := range l.peers {
         peers = append(peers, peer)
     }
@@ -61,8 +61,8 @@ func (l *NetworkLayer) GetPeers() []*Peer {
 }
 
 // SendMessage sends a message to a peer
-func (l *NetworkLayer) SendMessage(peer *Peer, msg *types.NetworkMessage) error {
-    if !peer.Connected {
+func (l *NetworkLayer) SendMessage(peer *types.Peer, msg *types.NetworkMessage) error {
+    if peer.Connection == nil {
         return errors.New("peer is not connected")
     }
 
@@ -80,7 +80,7 @@ func (l *NetworkLayer) Broadcast(msg *types.NetworkMessage) error {
     defer l.mu.RUnlock()
 
     for _, peer := range l.peers {
-        if peer.Connected {
+        if peer.Connection != nil {
             if err := l.SendMessage(peer, msg); err != nil {
                 // Log error but continue broadcasting
                 continue
