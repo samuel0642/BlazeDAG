@@ -18,4 +18,4 @@ state:
 
 evm:
   chain_id: 1
-  gas_limit: 8000000 
+  gas_limit: 8000000

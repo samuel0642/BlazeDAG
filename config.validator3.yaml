@@ -1,4 +1,4 @@
-node_id: "validator1"
+node_id: "validator3"
 consensus:
   wave_timeout: 10s
   round_duration: 5s
@@ -7,10 +7,10 @@ consensus:
     - "validator2"
     - "validator3"
   quorum_size: 2
-  listen_addr: "localhost:3000"
+  listen_addr: "localhost:3002"
   seeds:
+    - "localhost:3000"
     - "localhost:3001"
-    - "localhost:3002"
   total_validators: 3
 
 state:
@@ -18,4 +18,4 @@ state:
 
 evm:
   chain_id: 1
-  gas_limit: 8000000 
+  gas_limit: 8000000

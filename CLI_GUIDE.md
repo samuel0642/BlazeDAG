@@ -11,7 +11,8 @@
 8. [Block Operations](#block-operations)
 9. [Network Operations](#network-operations)
 10. [Running Multiple Validators](#running-multiple-validators)
-11. [Troubleshooting](#troubleshooting)
+11. [Monitoring and Logging](#monitoring-and-logging)
+12. [Troubleshooting](#troubleshooting)
 
 ## Installation
 
@@ -28,36 +29,154 @@ make build
 
 ## Starting the Node
 
+### Configuration
+BlazeDAG uses a YAML configuration file (`config.yaml`) to configure node behavior. The configuration includes:
+- Node ID
+- Consensus settings
+- Network settings
+- State settings
+- EVM settings
+
 ### Basic Node
+1. Create a basic config.yaml:
+```yaml
+node_id: "node1"
+consensus:
+  wave_timeout: 10s
+  round_duration: 5s
+  validator_set:
+    - "node1"
+  quorum_size: 1
+  listen_addr: "localhost:3000"
+  seeds: []
+  total_validators: 1
+```
+
+2. Start the node:
 ```bash
 ./bin/blazedag
 ```
 
 ### Validator Node
-```bash
-./bin/blazedag --validator --node-id <node_id> --port <port>
+1. Create a validator config.yaml:
+```yaml
+node_id: "validator1"
+consensus:
+  wave_timeout: 10s
+  round_duration: 5s
+  validator_set:
+    - "validator1"
+    - "validator2"
+    - "validator3"
+  quorum_size: 2
+  listen_addr: "localhost:3000"
+  seeds:
+    - "localhost:3001"
+    - "localhost:3002"
+  total_validators: 3
 ```
 
-Example:
+2. Start the validator:
 ```bash
-./bin/blazedag --validator --node-id validator1 --port 3000
+./bin/blazedag
 ```
 
-Node ID Requirements:
-- Must be unique in the network
-- Used to identify the validator
-- Should be descriptive (e.g., validator1, validator2)
-- Cannot contain special characters
-
-### Custom Port
+### Custom Configuration
+You can specify a different config file:
 ```bash
-./bin/blazedag --port 3000
+./bin/blazedag -config custom_config.yaml
 ```
 
-### Combined Options
-```bash
-./bin/blazedag --validator --node-id <node_id> --port <port>
+### Running Multiple Validators
+1. Create separate config files for each validator:
+
+config.validator1.yaml:
+```yaml
+node_id: "validator1"
+consensus:
+  wave_timeout: 10s
+  round_duration: 5s
+  validator_set:
+    - "validator1"
+    - "validator2"
+    - "validator3"
+  quorum_size: 2
+  listen_addr: "localhost:3000"
+  seeds:
+    - "localhost:3001"
+    - "localhost:3002"
+  total_validators: 3
 ```
+
+config.validator2.yaml:
+```yaml
+node_id: "validator2"
+consensus:
+  wave_timeout: 10s
+  round_duration: 5s
+  validator_set:
+    - "validator1"
+    - "validator2"
+    - "validator3"
+  quorum_size: 2
+  listen_addr: "localhost:3001"
+  seeds:
+    - "localhost:3000"
+    - "localhost:3002"
+  total_validators: 3
+```
+
+config.validator3.yaml:
+```yaml
+node_id: "validator3"
+consensus:
+  wave_timeout: 10s
+  round_duration: 5s
+  validator_set:
+    - "validator1"
+    - "validator2"
+    - "validator3"
+  quorum_size: 2
+  listen_addr: "localhost:3002"
+  seeds:
+    - "localhost:3000"
+    - "localhost:3001"
+  total_validators: 3
+```
+
+2. Start each validator with its config:
+```bash
+# Terminal 1
+./bin/blazedag -config config.validator1.yaml
+
+# Terminal 2
+./bin/blazedag -config config.validator2.yaml
+
+# Terminal 3
+./bin/blazedag -config config.validator3.yaml
+```
+
+### Configuration Parameters
+
+#### Node Configuration
+- `node_id`: Unique identifier for the node
+- `consensus`: Consensus-related settings
+  - `wave_timeout`: Maximum duration for a wave
+  - `round_duration`: Duration of each round
+  - `validator_set`: List of validator addresses
+  - `quorum_size`: Minimum votes required for consensus
+  - `listen_addr`: Address to listen for incoming connections
+  - `seeds`: List of seed node addresses
+  - `total_validators`: Total number of validators
+
+#### State Configuration
+- `state`: State-related settings
+  - `genesis_file`: Path to genesis file
+
+#### EVM Configuration
+- `evm`: EVM-related settings
+  - `chain_id`: Chain identifier
+  - `gas_limit`: Maximum gas per block
 
 ## Running the Chain
 
@@ -444,6 +563,138 @@ Validator Properties:
 - Consensus participation
 - Block creation rights
 - Transaction validation
+
+## Monitoring and Logging
+
+### Starting with Logging
+
+1. Start the node with logging enabled:
+```bash
+./bin/blazedag 2>&1 | tee chain.log
+```
+
+This will:
+- Run the node
+- Show output in terminal
+- Save all output to chain.log
+
+### Monitoring Wave and Round Progression
+
+1. Check current wave and round:
+```bash
+status
+```
+This shows:
+- Current wave number
+- Current round number
+- Wave status (Proposing, Voting, Committing, Finalized)
+- Leader status
+
+2. Monitor wave progression:
+```bash
+tail -f chain.log | grep "wave"
+```
+This will show:
+- Wave start events
+- Wave completion events
+- Wave timeout events
+- Wave status changes
+
+3. Monitor round progression:
+```bash
+tail -f chain.log | grep "round"
+```
+This will show:
+- Round start events
+- Round completion events
+- Round timeout events
+- Round status changes
+
+### Log File Structure
+
+The log file contains detailed information about:
+- Wave transitions
+- Round transitions
+- Block creation
+- Consensus events
+- Network events
+- Error messages
+
+Example log entries:
+```
+[INFO] Starting new wave: 1
+[INFO] Round 0 started in wave 1
+[INFO] Block created in round 0, wave 1
+[INFO] Round 0 completed in wave 1
+[INFO] Round 1 started in wave 1
+[INFO] Wave 1 completed
+[INFO] Starting new wave: 2
+```
+
+### Real-time Monitoring
+
+1. Monitor all events:
+```bash
+tail -f chain.log
+```
+
+2. Monitor specific events:
+```bash
+# Monitor wave events
+tail -f chain.log | grep "wave"
+
+# Monitor round events
+tail -f chain.log | grep "round"
+
+# Monitor block events
+tail -f chain.log | grep "block"
+
+# Monitor consensus events
+tail -f chain.log | grep "consensus"
+```
+
+### Log Analysis
+
+1. Count waves:
+```bash
+grep "Starting new wave" chain.log | wc -l
+```
+
+2. Count rounds per wave:
+```bash
+grep "Round.*started in wave" chain.log | awk '{print $NF}' | sort | uniq -c
+```
+
+3. Count blocks per round:
+```bash
+grep "Block created in round" chain.log | awk '{print $NF}' | sort | uniq -c
+```
+
+### Best Practices for Monitoring
+
+1. **Regular Checks**
+   - Monitor wave progression
+   - Check round completion
+   - Verify block creation
+   - Monitor consensus status
+
+2. **Log Management**
+   - Rotate logs regularly
+   - Archive important logs
+   - Monitor log size
+   - Set up log alerts
+
+3. **Performance Monitoring**
+   - Track wave duration
+   - Monitor round completion time
+   - Check block creation rate
+   - Monitor consensus speed
+
+4. **Error Monitoring**
+   - Watch for wave timeouts
+   - Monitor round failures
+   - Check consensus errors
+   - Track network issues
 
 ## Troubleshooting
 

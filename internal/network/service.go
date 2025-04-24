@@ -3,6 +3,9 @@ package network
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
+	"net"
 	"sort"
 	"sync"
 	"time"
@@ -17,8 +20,8 @@ var (
 
 // Config represents the network service configuration
 type Config struct {
-	ListenAddr    string
-	Seeds         []string
+	ListenAddr    types.Address
+	Seeds         []types.Address
 	MaxPeers      int
 	MinPeers      int
 	MessageBuffer int
@@ -30,7 +33,7 @@ type Service struct {
 	config *Config
 	layer  *NetworkLayer
 
-	peers    map[string]*Peer
+	peers    map[types.Address]*types.Peer
 	messages map[string]*types.NetworkMessage
 
 	running bool
@@ -46,7 +49,7 @@ func NewService(config *Config) *Service {
 	return &Service{
 		config:   config,
 		layer:    NewNetworkLayer(),
-		peers:    make(map[string]*Peer),
+		peers:    make(map[types.Address]*types.Peer),
 		messages: make(map[string]*types.NetworkMessage),
 		running:  false,
 		ctx:      ctx,
@@ -56,27 +59,18 @@ func NewService(config *Config) *Service {
 
 // Start starts the network service
 func (s *Service) Start() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.running {
-		return ErrServiceAlreadyRunning
+	// Start listening for connections
+	listener, err := net.Listen("tcp", string(s.config.ListenAddr))
+	if err != nil {
+		return fmt.Errorf("failed to start listener: %v", err)
 	}
 
-	// Start network layer
-	if err := s.layer.Start(); err != nil {
-		return err
-	}
+	// Start accepting connections
+	go s.acceptConnections(listener)
 
 	// Connect to seed nodes
 	for _, seed := range s.config.Seeds {
-		peer := &Peer{
-			ID:        seed,
-			Addr:      seed,
-			Connected: true,
-			LastSeen:  time.Now(),
-		}
-		s.AddPeer(peer)
+		go s.connectToSeed(seed)
 	}
 
 	s.running = true
@@ -108,7 +102,7 @@ func (s *Service) Stop() error {
 	}
 
 	// Clear peers and messages
-	s.peers = make(map[string]*Peer)
+	s.peers = make(map[types.Address]*types.Peer)
 	s.messages = make(map[string]*types.NetworkMessage)
 	s.running = false
 
@@ -118,8 +112,66 @@ func (s *Service) Stop() error {
 	return nil
 }
 
-// AddPeer adds a peer to the network service
-func (s *Service) AddPeer(peer *Peer) {
+// acceptConnections accepts incoming connections
+func (s *Service) acceptConnections(listener net.Listener) {
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Printf("Failed to accept connection: %v", err)
+			continue
+		}
+
+		// Handle new connection
+		go s.handleConnection(conn)
+	}
+}
+
+// handleConnection handles a new connection
+func (s *Service) handleConnection(conn net.Conn) {
+	defer conn.Close()
+
+	// Read peer information
+	peer := &types.Peer{
+		Address:    types.Address(conn.RemoteAddr().String()),
+		LastSeen:   time.Now(),
+		Connection: conn,
+	}
+
+	// Add peer
+	s.addPeer(peer)
+
+	// Handle messages from peer
+	for {
+		// TODO: Implement message handling
+	}
+}
+
+// connectToSeed connects to a seed node
+func (s *Service) connectToSeed(seed types.Address) {
+	conn, err := net.Dial("tcp", string(seed))
+	if err != nil {
+		log.Printf("Failed to connect to seed %s: %v", seed, err)
+		return
+	}
+
+	// Create peer
+	peer := &types.Peer{
+		Address:    seed,
+		LastSeen:   time.Now(),
+		Connection: conn,
+	}
+
+	// Add peer
+	s.addPeer(peer)
+
+	// Handle messages from peer
+	for {
+		// TODO: Implement message handling
+	}
+}
+
+// addPeer adds a new peer
+func (s *Service) addPeer(peer *types.Peer) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -128,25 +180,34 @@ func (s *Service) AddPeer(peer *Peer) {
 	}
 
 	peer.LastSeen = time.Now()
-	s.peers[peer.ID] = peer
+	s.peers[peer.Address] = peer
 	s.layer.AddPeer(peer)
 }
 
-// RemovePeer removes a peer from the network service
-func (s *Service) RemovePeer(peerID string) {
+// removePeer removes a peer
+func (s *Service) removePeer(address types.Address) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	delete(s.peers, peerID)
-	s.layer.RemovePeer(peerID)
+	delete(s.peers, address)
+	s.layer.RemovePeer(address)
+}
+
+// updatePeerLastSeen updates a peer's last seen timestamp
+func (s *Service) updatePeerLastSeen(address types.Address) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if peer, exists := s.peers[address]; exists {
+		peer.LastSeen = time.Now()
+	}
 }
 
 // GetPeers returns all peers in the network service
-func (s *Service) GetPeers() []*Peer {
+func (s *Service) GetPeers() []*types.Peer {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	peers := make([]*Peer, 0, len(s.peers))
+	peers := make([]*types.Peer, 0, len(s.peers))
 	for _, peer := range s.peers {
 		peers = append(peers, peer)
 	}
@@ -181,11 +242,10 @@ func (s *Service) discoverPeers(ctx context.Context) {
 						return
 					default:
 						// Try to connect to seed
-						peer := &Peer{
-							ID:   seed,
-							Addr: seed,
+						peer := &types.Peer{
+							Address: seed,
 						}
-						s.AddPeer(peer)
+						s.addPeer(peer)
 					}
 				}
 			}()
@@ -210,7 +270,7 @@ type SyncState struct {
 }
 
 // SendMessage sends a message to a specific peer
-func (s *Service) SendMessage(peerID string, msg *types.NetworkMessage) error {
+func (s *Service) SendMessage(peerID types.Address, msg *types.NetworkMessage) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -296,10 +356,10 @@ func (s *Service) OptimizePeerConnections() {
 	}
 
 	// Initialize peer scores if not exists
-	peerScores := make(map[string]*PeerScore)
+	peerScores := make(map[types.Address]*PeerScore)
 	for _, peer := range s.peers {
-		if _, exists := peerScores[peer.ID]; !exists {
-			peerScores[peer.ID] = &PeerScore{
+		if _, exists := peerScores[peer.Address]; !exists {
+			peerScores[peer.Address] = &PeerScore{
 				LastUpdated: time.Now(),
 			}
 		}
@@ -313,7 +373,7 @@ func (s *Service) OptimizePeerConnections() {
 		score.Latency = time.Since(peer.LastSeen)
 		
 		// Update uptime
-		if peer.Connected {
+		if peer.Connection != nil {
 			score.Uptime += time.Since(score.LastUpdated)
 		}
 		
@@ -327,7 +387,7 @@ func (s *Service) OptimizePeerConnections() {
 
 	// Sort peers by score
 	type scoredPeer struct {
-		ID    string
+		ID    types.Address
 		Score float64
 	}
 	
@@ -354,7 +414,7 @@ func (s *Service) OptimizePeerConnections() {
 	if len(scoredPeers) > optimalPeers {
 		// Disconnect from lowest scoring peers
 		for i := optimalPeers; i < len(scoredPeers); i++ {
-			s.RemovePeer(scoredPeers[i].ID)
+			s.removePeer(scoredPeers[i].ID)
 		}
 	} else if len(scoredPeers) < s.config.MinPeers {
 		// Connect to more peers if below minimum
@@ -363,11 +423,10 @@ func (s *Service) OptimizePeerConnections() {
 				break
 			}
 			if _, exists := s.peers[seed]; !exists {
-				peer := &Peer{
-					ID:   seed,
-					Addr: seed,
+				peer := &types.Peer{
+					Address: seed,
 				}
-				s.AddPeer(peer)
+				s.addPeer(peer)
 			}
 		}
 	}

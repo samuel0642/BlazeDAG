@@ -2,18 +2,18 @@ package types
 
 import (
 	"crypto/sha256"
-	"encoding/hex"
+	// "encoding/hex"
 	"encoding/json"
 )
 
 // ComputeHash returns the hash of the block
-func (b *Block) ComputeHash() string {
+func (b *Block) ComputeHash() Hash {
 	if b.hash == nil {
 		data, _ := json.Marshal(b)
 		hash := sha256.Sum256(data)
 		b.hash = hash[:]
 	}
-	return hex.EncodeToString(b.hash)
+	return b.hash
 }
 
 // GetLatestBlock returns the latest block

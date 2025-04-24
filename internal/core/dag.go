@@ -10,16 +10,16 @@ import (
 // DAG represents a directed acyclic graph of blocks
 type DAG struct {
 	blocks     map[string]*types.Block
-	references map[string][]types.Reference
+	references map[string][]*types.Reference
 	mu         sync.RWMutex
-	height     types.Height
+	height     types.BlockNumber
 }
 
 // NewDAG creates a new DAG
 func NewDAG() *DAG {
 	return &DAG{
 		blocks:     make(map[string]*types.Block),
-		references: make(map[string][]types.Reference),
+		references: make(map[string][]*types.Reference),
 		height:     0,
 	}
 }
@@ -29,7 +29,7 @@ func (d *DAG) AddBlock(block *types.Block) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	hash := block.ComputeHash()
+	hash := string(block.ComputeHash())
 	if _, exists := d.blocks[hash]; exists {
 		return fmt.Errorf("block already exists")
 	}
@@ -41,18 +41,18 @@ func (d *DAG) AddBlock(block *types.Block) error {
 
 	// Add references
 	if block.Body != nil {
-		d.references[hash] = block.Body.References
+		d.references[hash] = block.Header.References
 	}
 
 	return nil
 }
 
 // GetBlock returns a block by its hash
-func (d *DAG) GetBlock(hash string) (*types.Block, error) {
+func (d *DAG) GetBlock(hash types.Hash) (*types.Block, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	block, exists := d.blocks[hash]
+	block, exists := d.blocks[string(hash)]
 	if !exists {
 		return nil, fmt.Errorf("block not found")
 	}
@@ -61,7 +61,7 @@ func (d *DAG) GetBlock(hash string) (*types.Block, error) {
 }
 
 // GetBlockByHeight returns a block by its height
-func (d *DAG) GetBlockByHeight(height types.Height) (*types.Block, error) {
+func (d *DAG) GetBlockByHeight(height types.BlockNumber) (*types.Block, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -75,7 +75,7 @@ func (d *DAG) GetBlockByHeight(height types.Height) (*types.Block, error) {
 }
 
 // GetLatestHeight returns the latest block height
-func (d *DAG) GetLatestHeight() types.Height {
+func (d *DAG) GetLatestHeight() types.BlockNumber {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.height
@@ -95,18 +95,18 @@ func (d *DAG) GetBlocks() []*types.Block {
 }
 
 // GetHeight returns the current height of the DAG
-func (d *DAG) GetHeight() types.Height {
+func (d *DAG) GetHeight() types.BlockNumber {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.height
 }
 
 // GetMaxHeight gets the maximum height in the DAG
-func (d *DAG) GetMaxHeight() types.Height {
+func (d *DAG) GetMaxHeight() types.BlockNumber {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	var maxHeight types.Height
+	var maxHeight types.BlockNumber
 	for _, block := range d.blocks {
 		if block.Header.Height > maxHeight {
 			maxHeight = block.Header.Height
@@ -117,7 +117,7 @@ func (d *DAG) GetMaxHeight() types.Height {
 }
 
 // GetBlocksByHeight gets all blocks at a given height
-func (d *DAG) GetBlocksByHeight(height types.Height) []*types.Block {
+func (d *DAG) GetBlocksByHeight(height types.BlockNumber) []*types.Block {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -153,11 +153,11 @@ func (d *DAG) GetBlockCount() int {
 }
 
 // GetReferences gets the references for a block
-func (d *DAG) GetReferences(hash string) []types.Reference {
+func (d *DAG) GetReferences(hash types.Hash) []*types.Reference {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	return d.references[hash]
+	return d.references[string(hash)]
 }
 
 // GetRecentBlocks returns the most recent blocks

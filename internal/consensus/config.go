@@ -3,46 +3,44 @@ package consensus
 import (
 	"fmt"
 	"time"
+
+	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
-// Config stores consensus configuration
+// Config represents the consensus configuration
 type Config struct {
 	// WaveTimeout is the maximum duration for a wave
 	WaveTimeout time.Duration
 
-	// MinValidators is the minimum number of validators required
-	MinValidators int
+	// RoundDuration is the duration of a round
+	RoundDuration time.Duration
 
-	// TotalValidators is the total number of validators
-	TotalValidators int
+	// ValidatorSet is the set of validators
+	ValidatorSet []types.Address
 
 	// QuorumSize is the minimum number of votes required for consensus
 	QuorumSize int
 
-	// BlockTime is the target time between blocks
-	BlockTime time.Duration
+	// ListenAddr is the address to listen for incoming connections
+	ListenAddr types.Address
 
-	// MaxBlockSize is the maximum size of a block in bytes
-	MaxBlockSize uint64
+	// Seeds are the addresses of seed nodes
+	Seeds []types.Address
 
-	// MaxTransactionsPerBlock is the maximum number of transactions per block
-	MaxTransactionsPerBlock uint64
-
-	// FaultTolerance is the number of faulty nodes that can be tolerated
-	FaultTolerance int
+	// TotalValidators is the total number of validators
+	TotalValidators int
 }
 
-// DefaultConfig returns the default consensus configuration
-func DefaultConfig() *Config {
+// NewConfig creates a new consensus configuration with default values
+func NewConfig() *Config {
 	return &Config{
-		WaveTimeout:            30 * time.Second,
-		MinValidators:         4,
-		TotalValidators:      10,
-		QuorumSize:           7,
-		BlockTime:            2 * time.Second,
-		MaxBlockSize:         1024 * 1024, // 1MB
-		MaxTransactionsPerBlock: 1000,
-		FaultTolerance:       3,
+		WaveTimeout:     30 * time.Second,
+		RoundDuration:   2 * time.Second,
+		ValidatorSet:    make([]types.Address, 0),
+		QuorumSize:      7,
+		ListenAddr:      types.Address(""),
+		Seeds:           make([]types.Address, 0),
+		TotalValidators: 10,
 	}
 }
 
@@ -51,26 +49,20 @@ func (c *Config) Validate() error {
 	if c.WaveTimeout <= 0 {
 		return fmt.Errorf("wave timeout must be positive")
 	}
-	if c.MinValidators < 1 {
-		return fmt.Errorf("minimum validators must be at least 1")
+	if c.RoundDuration <= 0 {
+		return fmt.Errorf("round duration must be positive")
 	}
-	if c.TotalValidators < c.MinValidators {
-		return fmt.Errorf("total validators must be at least minimum validators")
+	if len(c.ValidatorSet) == 0 {
+		return fmt.Errorf("validator set cannot be empty")
 	}
-	if c.QuorumSize < 1 || c.QuorumSize > c.TotalValidators {
-		return fmt.Errorf("quorum size must be between 1 and total validators")
+	if c.QuorumSize <= 0 || c.QuorumSize > len(c.ValidatorSet) {
+		return fmt.Errorf("invalid quorum size")
 	}
-	if c.BlockTime <= 0 {
-		return fmt.Errorf("block time must be positive")
+	if c.ListenAddr == "" {
+		return fmt.Errorf("listen address cannot be empty")
 	}
-	if c.MaxBlockSize == 0 {
-		return fmt.Errorf("max block size must be positive")
-	}
-	if c.MaxTransactionsPerBlock == 0 {
-		return fmt.Errorf("max transactions per block must be positive")
-	}
-	if c.FaultTolerance < 0 || c.FaultTolerance > c.TotalValidators/3 {
-		return fmt.Errorf("fault tolerance must be between 0 and total validators/3")
+	if c.TotalValidators <= 0 {
+		return fmt.Errorf("total validators must be positive")
 	}
 	return nil
 } 

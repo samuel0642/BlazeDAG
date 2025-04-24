@@ -1,12 +1,19 @@
 package consensus
 
 import (
+	"errors"
+	"fmt"
+	"log"
 	"sync"
 	"time"
 
 	"github.com/CrossDAG/BlazeDAG/internal/core"
 	"github.com/CrossDAG/BlazeDAG/internal/state"
 	"github.com/CrossDAG/BlazeDAG/internal/types"
+)
+
+var (
+	ErrNoActiveWave = errors.New("no active wave")
 )
 
 // Proposal represents a block proposal in the consensus process
@@ -42,6 +49,7 @@ type Engine struct {
 	proposals map[string]*types.Proposal
 	votes     map[string][]*types.Vote
 	mu        sync.RWMutex
+	logger    *log.Logger
 }
 
 // NewEngine creates a new consensus engine with the given configuration
@@ -50,6 +58,7 @@ func NewEngine(config *Config) *Engine {
 		config:    config,
 		proposals: make(map[string]*types.Proposal),
 		votes:     make(map[string][]*types.Vote),
+		logger:    log.New(log.Writer(), "[Consensus] ", log.LstdFlags),
 	}
 }
 
@@ -58,6 +67,8 @@ func (e *Engine) HandleProposal(proposal *types.Proposal) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	e.logger.Printf("Received proposal for block %s in wave %d, round %d", 
+		proposal.BlockHash, proposal.Wave, proposal.Round)
 	e.proposals[string(proposal.BlockHash)] = proposal
 	return nil
 }
@@ -67,6 +78,8 @@ func (e *Engine) HandleVote(vote *types.Vote) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	e.logger.Printf("Received vote for block %s from validator %s in wave %d, round %d",
+		vote.BlockHash, vote.Validator, vote.Wave, vote.Round)
 	e.votes[string(vote.BlockHash)] = append(e.votes[string(vote.BlockHash)], vote)
 	return nil
 }
@@ -80,46 +93,54 @@ func (e *Engine) HasQuorum() bool {
 	validators := make(map[types.Address]bool)
 	for _, votes := range e.votes {
 		for _, vote := range votes {
-			validators[types.Address(vote.Validator)] = true
+			validators[vote.Validator] = true
 		}
 	}
 
 	// Check if we have enough votes (2/3 + 1)
-	return len(validators) >= (2*e.config.TotalValidators/3 + 1)
+	hasQuorum := len(validators) >= (2*e.config.TotalValidators/3 + 1)
+	if hasQuorum {
+		e.logger.Printf("Quorum reached with %d validators", len(validators))
+	}
+	return hasQuorum
 }
 
-// ConsensusEngine manages the consensus process
+// ConsensusEngine represents the consensus engine
 type ConsensusEngine struct {
-	dag          *core.DAG
-	stateManager *state.StateManager
-	executor     *core.EVMExecutor
-	isValidator  bool
-	running      bool
-	config       *Config
-	proposals    map[string]*types.Proposal
-	votes        map[string][]*types.Vote
-	mu           sync.RWMutex
-	validators   []types.Address
-	nodeID       types.Address
-	waveManager  *WaveManager
-	currentWave  *Wave
+	mu            sync.RWMutex
+	running       bool
+	nodeID        types.Address
+	dag           *core.DAG
+	stateManager  *state.StateManager
+	waveManager   *WaveManager
+	currentWave   *WaveState
+	currentRound  types.Round
+	currentHeight types.BlockNumber
+	currentLeader types.Address
+	votes         map[string]map[types.Address]bool
+	config        *Config
+	proposals     map[string]*types.Proposal
+	validators    []types.Address
+	waves         map[types.Wave]*WaveState
+	logger        *log.Logger
 }
 
 // NewConsensusEngine creates a new consensus engine
-func NewConsensusEngine(dag *core.DAG, stateManager *state.StateManager, executor *core.EVMExecutor, isValidator bool, nodeID types.Address) *ConsensusEngine {
-	config := DefaultConfig()
+func NewConsensusEngine(dag *core.DAG, stateManager *state.StateManager, nodeID types.Address, config *Config) *ConsensusEngine {
 	return &ConsensusEngine{
-		dag:          dag,
-		stateManager: stateManager,
-		executor:     executor,
-		isValidator:  isValidator,
-		config:       config,
-		proposals:    make(map[string]*types.Proposal),
-		votes:        make(map[string][]*types.Vote),
-		validators:   make([]types.Address, 0),
-		nodeID:       nodeID,
-		waveManager:  NewWaveManager(config),
-		currentWave:  nil,
+		dag:           dag,
+		stateManager:  stateManager,
+		nodeID:        nodeID,
+		config:        config,
+		proposals:     make(map[string]*types.Proposal),
+		votes:         make(map[string]map[types.Address]bool),
+		validators:    make([]types.Address, 0),
+		waveManager:   NewWaveManager(config),
+		currentWave:   nil,
+		currentRound:  0,
+		currentHeight: 0,
+		waves:         make(map[types.Wave]*WaveState),
+		logger:        log.New(log.Writer(), "[Consensus] ", log.LstdFlags),
 	}
 }
 
@@ -132,24 +153,90 @@ func (ce *ConsensusEngine) Start() error {
 		return nil
 	}
 
-	ce.running = true
-	return nil
-}
+	// Initialize validator set
+	ce.validators = ce.config.ValidatorSet
+	ce.logger.Printf("Initialized validator set with %d validators", len(ce.validators))
 
-// Stop stops the consensus engine
-func (ce *ConsensusEngine) Stop() error {
-	ce.mu.Lock()
-	defer ce.mu.Unlock()
-
-	if !ce.running {
-		return nil
+	// Start with wave 0
+	ce.currentWave = &WaveState{
+		Number:    0,
+		StartTime: time.Now(),
+		EndTime:   time.Now().Add(ce.config.WaveTimeout),
+		Status:    types.WaveStatusProposing,
+		Votes:     make(map[types.Address]bool),
 	}
 
-	ce.running = false
+	// Select initial leader
+	ce.selectLeader()
+	ce.logger.Printf("Selected initial leader: %s", ce.currentLeader)
+
+	ce.running = true
+	ce.logger.Printf("Consensus engine started for node %s", ce.nodeID)
+
+	// Start wave timer
+	go ce.waveTimer()
+
 	return nil
 }
 
-// HandleBlock handles a new block
+// waveTimer handles wave timeouts
+func (ce *ConsensusEngine) waveTimer() {
+	for ce.running {
+		time.Sleep(ce.config.WaveTimeout)
+		ce.mu.Lock()
+		if ce.currentWave != nil {
+			ce.logger.Printf("Wave %d timed out", ce.currentWave.Number)
+			ce.currentWave.Number++
+			ce.selectLeader()
+			ce.logger.Printf("Selected new leader for wave %d: %s", 
+				ce.currentWave.Number, ce.currentLeader)
+		}
+		ce.mu.Unlock()
+	}
+}
+
+// selectLeader selects a leader for the current wave
+func (ce *ConsensusEngine) selectLeader() {
+	if len(ce.validators) == 0 {
+		ce.logger.Printf("No validators available for leader selection")
+		return
+	}
+
+	// Select leader based on wave number
+	leaderIndex := int(ce.currentWave.Number) % len(ce.validators)
+	ce.currentLeader = ce.validators[leaderIndex]
+	ce.logger.Printf("Selected leader %s for wave %d", 
+		ce.currentLeader, ce.currentWave.Number)
+}
+
+// IsLeader checks if the current node is the leader
+func (ce *ConsensusEngine) IsLeader() bool {
+	ce.mu.RLock()
+	defer ce.mu.RUnlock()
+
+	if !ce.running || ce.currentWave == nil {
+		return false
+	}
+
+	isLeader := ce.currentLeader == ce.nodeID
+	if isLeader {
+		ce.logger.Printf("Node %s is leader for wave %d", 
+			ce.nodeID, ce.currentWave.Number)
+	}
+	return isLeader
+}
+
+// GetCurrentWave returns the current wave
+func (ce *ConsensusEngine) GetCurrentWave() types.Wave {
+	ce.mu.RLock()
+	defer ce.mu.RUnlock()
+	if ce.currentWave == nil {
+		return 0
+	}
+	return ce.currentWave.Number
+}
+
+// HandleBlock handles a block
 func (ce *ConsensusEngine) HandleBlock(block *types.Block) error {
 	ce.mu.Lock()
 	defer ce.mu.Unlock()
@@ -158,64 +245,64 @@ func (ce *ConsensusEngine) HandleBlock(block *types.Block) error {
 		return nil
 	}
 
+	ce.logger.Printf("Processing block %s in wave %d, round %d", 
+		block.ComputeHash(), block.Header.Wave, block.Header.Round)
+
 	// Validate block
 	if err := ce.validateBlock(block); err != nil {
+		ce.logger.Printf("Block validation failed: %v", err)
 		return err
 	}
 
 	// Add block to DAG
 	if err := ce.dag.AddBlock(block); err != nil {
+		ce.logger.Printf("Failed to add block to DAG: %v", err)
 		return err
 	}
 
 	// Create proposal
 	proposal := &types.Proposal{
-		ID:        []byte(block.ComputeHash()),
+		ID:        block.ComputeHash(),
+		BlockHash: block.ComputeHash(),
 		Wave:      block.Header.Wave,
 		Round:     block.Header.Round,
 		Block:     block,
 		Proposer:  types.Address(block.Header.Validator),
 		Timestamp: time.Now(),
-		Status:    types.WaveStatusProposing,
+		Status:    types.ProposalStatusPending,
 	}
 
 	// Handle proposal
 	ce.proposals[string(proposal.ID)] = proposal
+	ce.logger.Printf("Created proposal for block %s", proposal.ID)
 	return nil
 }
 
-// HandleVote handles a vote
-func (ce *ConsensusEngine) HandleVote(vote *types.Vote) error {
+// HandleVote handles a vote from a validator
+func (ce *ConsensusEngine) HandleVote(validator types.Address, proposalID string) error {
 	ce.mu.Lock()
 	defer ce.mu.Unlock()
 
-	if !ce.running {
-		return nil
+	if ce.currentWave == nil {
+		return ErrNoActiveWave
 	}
 
-	// Validate vote
-	if err := ce.validateVote(vote); err != nil {
-		return err
+	ce.logger.Printf("Received vote from validator %s for proposal %s in wave %d", 
+		validator, proposalID, ce.currentWave.Number)
+
+	// Initialize votes map for proposal if not exists
+	if _, exists := ce.votes[proposalID]; !exists {
+		ce.votes[proposalID] = make(map[types.Address]bool)
 	}
 
-	// Add vote
-	ce.votes[string(vote.ProposalID)] = append(ce.votes[string(vote.ProposalID)], vote)
+	// Record vote
+	ce.votes[proposalID][validator] = true
 
-	// Check quorum
+	// Check if we have enough votes (2/3 + 1)
 	if ce.HasQuorum() {
-		// Create certificate
-		cert := &types.Certificate{
-			BlockHash:  []byte(vote.ProposalID),
-			Wave:      vote.Wave,
-			Round:     vote.Round,
-			Timestamp: time.Now(),
-		}
-
-		// Add certificate to block
-		block, err := ce.dag.GetBlock(string(vote.ProposalID))
-		if err == nil {
-			block.Certificate = cert
-		}
+		ce.logger.Printf("Quorum reached for proposal %s in wave %d", 
+			proposalID, ce.currentWave.Number)
+		ce.currentWave.Number++
 	}
 
 	return nil
@@ -230,14 +317,19 @@ func (ce *ConsensusEngine) HandleCertificate(cert *types.Certificate) error {
 		return nil
 	}
 
+	ce.logger.Printf("Processing certificate for block %s in wave %d, round %d", 
+		cert.BlockHash, cert.Wave, cert.Round)
+
 	// Validate certificate
 	if err := ce.validateCertificate(cert); err != nil {
+		ce.logger.Printf("Certificate validation failed: %v", err)
 		return err
 	}
 
 	// Get block
-	block, err := ce.dag.GetBlock(string(cert.BlockHash))
+	block, err := ce.dag.GetBlock(cert.BlockHash)
 	if err != nil {
+		ce.logger.Printf("Failed to get block for certificate: %v", err)
 		return err
 	}
 
@@ -245,7 +337,13 @@ func (ce *ConsensusEngine) HandleCertificate(cert *types.Certificate) error {
 	block.Certificate = cert
 
 	// Update state
-	return ce.stateManager.CommitBlock(block)
+	if err := ce.stateManager.CommitBlock(block); err != nil {
+		ce.logger.Printf("Failed to commit block: %v", err)
+		return err
+	}
+
+	ce.logger.Printf("Block %s committed with certificate", cert.BlockHash)
+	return nil
 }
 
 // validateBlock validates a block
@@ -276,7 +374,7 @@ func (ce *ConsensusEngine) validateVote(vote *types.Vote) error {
 	}
 
 	// Check if block exists
-	_, err := ce.dag.GetBlock(string(vote.ProposalID))
+	_, err := ce.dag.GetBlock(vote.BlockHash)
 	if err != nil {
 		return err
 	}
@@ -292,7 +390,7 @@ func (ce *ConsensusEngine) validateCertificate(cert *types.Certificate) error {
 	}
 
 	// Check if block exists
-	_, err := ce.dag.GetBlock(string(cert.BlockHash))
+	_, err := ce.dag.GetBlock(cert.BlockHash)
 	if err != nil {
 		return err
 	}
@@ -304,15 +402,15 @@ func (ce *ConsensusEngine) validateCertificate(cert *types.Certificate) error {
 func (ce *ConsensusEngine) validateReferences(block *types.Block) error {
 	// Check parent exists
 	if len(block.Header.ParentHash) > 0 {
-		_, err := ce.dag.GetBlock(string(block.Header.ParentHash))
+		_, err := ce.dag.GetBlock(block.Header.ParentHash)
 		if err != nil {
 			return err
 		}
 	}
 
 	// Check other references
-	for _, ref := range block.Body.References {
-		_, err := ce.dag.GetBlock(string(ref.BlockHash))
+	for _, ref := range block.Header.References {
+		_, err := ce.dag.GetBlock(ref.BlockHash)
 		if err != nil {
 			return err
 		}
@@ -348,13 +446,6 @@ func (ce *ConsensusEngine) validateTransactions(block *types.Block) error {
 	return nil
 }
 
-// GetCurrentWave returns the current wave
-func (ce *ConsensusEngine) GetCurrentWave() *Wave {
-	ce.mu.RLock()
-	defer ce.mu.RUnlock()
-	return ce.currentWave
-}
-
 // StartNewWave starts a new consensus wave
 func (ce *ConsensusEngine) StartNewWave() error {
 	ce.mu.Lock()
@@ -362,6 +453,7 @@ func (ce *ConsensusEngine) StartNewWave() error {
 
 	wave, err := ce.waveManager.StartNewWave()
 	if err != nil {
+		ce.logger.Printf("Failed to start new wave: %v", err)
 		return err
 	}
 
@@ -369,78 +461,57 @@ func (ce *ConsensusEngine) StartNewWave() error {
 	wave.Leader = ce.validators[leaderIndex]
 	ce.currentWave = wave
 
+	ce.logger.Printf("Started new wave %d with leader %s", 
+		wave.Number, wave.Leader)
 	return nil
 }
 
-// SelectLeader selects a leader for the current wave
-func (ce *ConsensusEngine) SelectLeader() {
+// CreateBlock creates a new block
+func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 	ce.mu.Lock()
 	defer ce.mu.Unlock()
 
 	if !ce.running {
-		return
+		return nil, errors.New("engine is not running")
 	}
 
-	// Get current wave
-	currentWave := ce.GetCurrentWave()
-	if currentWave == nil {
-		return
+	ce.logger.Printf("Creating new block in wave %d, round %d", 
+		ce.currentWave.Number, ce.currentRound)
+
+	// Create block header
+	header := &types.BlockHeader{
+		Version:    1,
+		Timestamp:  time.Now(),
+		Round:      ce.currentRound,
+		Wave:       ce.currentWave.Number,
+		Height:     ce.getNextHeight(),
+		ParentHash: ce.getParentHash(),
+		References: ce.selectReferences(),
+		StateRoot:  ce.calculateStateRoot(),
+		Validator:  ce.nodeID,
 	}
 
-	// Select leader based on wave number
-	leaderIndex := int(currentWave.Number) % len(ce.validators)
-	currentWave.Leader = ce.validators[leaderIndex]
-}
-
-// IsLeader checks if this node is the current wave leader
-func (ce *ConsensusEngine) IsLeader() bool {
-	ce.mu.RLock()
-	defer ce.mu.RUnlock()
-
-	if !ce.running || !ce.isValidator {
-		return false
+	// Create block body
+	body := &types.BlockBody{
+		Transactions: make([]*types.Transaction, 0),
+		Receipts:     make([]*types.Receipt, 0),
+		Events:       make([]*types.Event, 0),
 	}
 
-	currentWave := ce.GetCurrentWave()
-	if currentWave == nil {
-		return false
+	// Create block
+	block := &types.Block{
+		Header: header,
+		Body:   body,
 	}
 
-	return currentWave.Leader == ce.nodeID
-}
-
-// CreateBlock creates a new block
-func (ce *ConsensusEngine) CreateBlock(wave types.Wave, round types.Round) (*types.Block, error) {
-	ce.mu.Lock()
-	defer ce.mu.Unlock()
-
-	// Get latest block
-	latestBlock, err := ce.dag.GetBlockByHeight(ce.dag.GetHeight())
-	if err != nil {
+	// Sign block
+	if err := ce.signBlock(block); err != nil {
+		ce.logger.Printf("Failed to sign block: %v", err)
 		return nil, err
 	}
 
-	// Create new block
-	block := &types.Block{
-		Header: &types.BlockHeader{
-			Version:    1,
-			Wave:       wave,
-			Round:      round,
-			Height:     ce.dag.GetHeight() + 1,
-			ParentHash: []byte(latestBlock.ComputeHash()),
-			StateRoot:  nil, // Will be set after execution
-			Validator:  []byte(ce.nodeID),
-			Timestamp:  time.Now(),
-		},
-		Body: &types.BlockBody{
-			Transactions: make([]types.Transaction, 0),
-			Receipts:     make([]types.Receipt, 0),
-			Events:       make([]types.Event, 0),
-			References:   make([]types.Reference, 0),
-		},
-		Timestamp: time.Now(),
-	}
-
+	ce.logger.Printf("Created block %s in wave %d, round %d", 
+		block.ComputeHash(), ce.currentWave.Number, ce.currentRound)
 	return block, nil
 }
 
@@ -450,22 +521,15 @@ func (ce *ConsensusEngine) ProcessVote(validator types.Address, vote bool) error
 	defer ce.mu.Unlock()
 
 	if ce.currentWave == nil {
-		return ErrNoActiveWave
+		return fmt.Errorf("no active wave")
 	}
 
+	ce.logger.Printf("Processing vote from validator %s in wave %d", 
+		validator, ce.currentWave.Number)
+
+	// Record vote
 	ce.currentWave.Votes[validator] = vote
-
-	// Check if we have enough votes (2/3 + 1)
-	validators := make(map[types.Address]bool)
-	for v, voted := range ce.currentWave.Votes {
-		if voted {
-			validators[v] = true
-		}
-	}
-
-	if len(validators) >= (2*ce.config.TotalValidators/3 + 1) {
-		ce.currentWave.Status = types.WaveStatusFinalized
-	}
+	ce.processVote(vote)
 
 	return nil
 }
@@ -486,39 +550,119 @@ func (ce *ConsensusEngine) GetValidators() []types.Address {
 	return validators
 }
 
-// HandleWaveTimeout handles wave timeout
-func (ce *ConsensusEngine) HandleWaveTimeout() {
-	ce.waveManager.HandleWaveTimeout()
-}
-
-// FinalizeWave finalizes the current wave
-func (ce *ConsensusEngine) FinalizeWave() {
-	ce.waveManager.FinalizeWave()
-}
-
 // ProcessTimeout handles wave timeout
 func (ce *ConsensusEngine) ProcessTimeout() {
 	ce.mu.Lock()
 	defer ce.mu.Unlock()
 
-	if ce.currentWave != nil && ce.currentWave.Status == types.WaveStatusProposing {
-		ce.currentWave.Status = types.WaveStatusFailed
+	if ce.currentWave != nil {
+		ce.logger.Printf("Processing timeout for wave %d", ce.currentWave.Number)
+		ce.currentWave.Number = 0
 	}
 }
 
-// HasQuorum checks if a proposal has received enough votes to reach quorum
+// HasQuorum checks if there is a quorum of votes
 func (ce *ConsensusEngine) HasQuorum() bool {
-	ce.mu.RLock()
-	defer ce.mu.RUnlock()
-
-	// Count unique validators who voted
 	validators := make(map[types.Address]bool)
-	for _, votes := range ce.votes {
-		for _, vote := range votes {
-			validators[types.Address(vote.Validator)] = true
+	for validator, voted := range ce.currentWave.Votes {
+		if voted {
+			validators[validator] = true
 		}
+	}
+	hasQuorum := len(validators) >= (2*ce.config.TotalValidators/3 + 1)
+	if hasQuorum {
+		ce.logger.Printf("Quorum reached with %d validators in wave %d", 
+			len(validators), ce.currentWave.Number)
+	}
+	return hasQuorum
+}
+
+// getNextHeight returns the next block height
+func (ce *ConsensusEngine) getNextHeight() types.BlockNumber {
+	return ce.currentHeight + 1
+}
+
+// getParentHash returns the parent block hash
+func (ce *ConsensusEngine) getParentHash() types.Hash {
+	if ce.currentHeight == 0 {
+		return types.Hash{}
+	}
+	block, err := ce.dag.GetBlockByHeight(ce.currentHeight)
+	if err != nil {
+		return types.Hash{}
+	}
+	return block.ComputeHash()
+}
+
+// selectReferences selects references for the new block
+func (ce *ConsensusEngine) selectReferences() []*types.Reference {
+	// TODO: Implement reference selection logic
+	return make([]*types.Reference, 0)
+}
+
+// calculateStateRoot calculates the state root
+func (ce *ConsensusEngine) calculateStateRoot() types.Hash {
+	// TODO: Implement state root calculation
+	return types.Hash{}
+}
+
+// signBlock signs a block
+func (ce *ConsensusEngine) signBlock(block *types.Block) error {
+	// TODO: Implement block signing
+	block.Header.Signature = types.Signature{
+		Validator:  ce.nodeID,
+		Signature:  []byte("dummy_signature"),
+		Timestamp:  time.Now(),
+	}
+	return nil
+}
+
+// BroadcastBlock broadcasts a block to all peers
+func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
+	// TODO: Implement block broadcasting
+	return nil
+}
+
+func (ce *ConsensusEngine) createProposal() *types.Proposal {
+	return &types.Proposal{
+		Timestamp:  time.Now(),
+		Round:      ce.currentRound,
+		Wave:       ce.currentWave.Number,
+		BlockHash:  ce.getParentHash(),
+		Proposer:   ce.nodeID,
+	}
+}
+
+func (ce *ConsensusEngine) processVote(vote bool) {
+	if vote {
+		ce.currentWave.Status = types.WaveStatusProposing
+	} else {
+		ce.currentWave.Status = types.WaveStatusFailed
 	}
 
 	// Check if we have enough votes (2/3 + 1)
-	return len(validators) >= (2*ce.config.TotalValidators/3 + 1)
+	validators := make(map[types.Address]bool)
+	for validator, voted := range ce.currentWave.Votes {
+		if voted {
+			validators[validator] = true
+		}
+	}
+
+	if len(validators) >= (2*ce.config.TotalValidators/3 + 1) {
+		ce.currentWave.Status = types.WaveStatusFinalized
+	}
+}
+
+func (ce *ConsensusEngine) advanceWave() {
+	if ce.currentWave.Status != types.WaveStatusFinalized {
+		ce.currentWave.Number++
+		ce.currentWave.Status = types.WaveStatusProposing
+	}
+}
+
+func (ce *ConsensusEngine) resetWave() {
+	if ce.currentWave.Status != types.WaveStatusFinalized {
+		ce.currentWave.Number = 0
+		ce.currentWave.Status = types.WaveStatusProposing
+	}
 } 
