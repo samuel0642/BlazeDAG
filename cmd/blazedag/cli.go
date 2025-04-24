@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/CrossDAG/BlazeDAG/internal/config"
 	"github.com/CrossDAG/BlazeDAG/internal/consensus"
 	"github.com/CrossDAG/BlazeDAG/internal/core"
 	"github.com/CrossDAG/BlazeDAG/internal/state"
+	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
 // CLI represents the command line interface
@@ -107,6 +109,10 @@ func (c *CLI) handleCommand(line string) error {
 		return c.handlePropose(args)
 	case "vote":
 		return c.handleVote(args)
+	case "blocks":
+		return c.handleBlocks(args)
+	case "block":
+		return c.handleBlock(args)
 	case "exit":
 		os.Exit(0)
 		return nil
@@ -122,6 +128,8 @@ func (c *CLI) handleHelp() error {
 	fmt.Println("  status  - Show current status")
 	fmt.Println("  propose - Propose a new block")
 	fmt.Println("  vote    - Vote on a proposal")
+	fmt.Println("  blocks  - List recent blocks")
+	fmt.Println("  block   - Show block details")
 	fmt.Println("  exit    - Exit the CLI")
 	return nil
 }
@@ -159,10 +167,63 @@ func (c *CLI) handleVote(args []string) error {
 	}
 
 	proposalID := args[0]
-	if err := c.consensusEngine.HandleVote(c.config.NodeID, proposalID); err != nil {
+	vote := &types.Vote{
+		ProposalID: types.Hash(proposalID),
+		Validator:  c.config.NodeID,
+		Timestamp:  time.Now(),
+	}
+
+	if err := c.consensusEngine.HandleVote(vote); err != nil {
 		return fmt.Errorf("failed to handle vote: %v", err)
 	}
 
 	fmt.Println("Vote submitted successfully")
+	return nil
+}
+
+// handleBlocks handles the blocks command
+func (c *CLI) handleBlocks(args []string) error {
+	count := 10 // Default to showing 10 most recent blocks
+	if len(args) > 0 {
+		if _, err := fmt.Sscanf(args[0], "%d", &count); err != nil {
+			return fmt.Errorf("invalid count: %v", err)
+		}
+	}
+
+	blocks := c.consensusEngine.GetRecentBlocks(count)
+	if len(blocks) == 0 {
+		fmt.Println("No blocks found")
+		return nil
+	}
+
+	fmt.Printf("Recent blocks (showing %d):\n", len(blocks))
+	for _, block := range blocks {
+		fmt.Printf("Height: %d, Hash: %s, Validator: %s\n",
+			block.Header.Height,
+			block.ComputeHash(),
+			block.Header.Validator)
+	}
+	return nil
+}
+
+// handleBlock handles the block command
+func (c *CLI) handleBlock(args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: block <block_hash>")
+	}
+
+	block, err := c.consensusEngine.GetBlock(types.Hash(args[0]))
+	if err != nil {
+		return fmt.Errorf("failed to get block: %v", err)
+	}
+
+	fmt.Printf("Block Details:\n")
+	fmt.Printf("  Height: %d\n", block.Header.Height)
+	fmt.Printf("  Hash: %s\n", block.ComputeHash())
+	fmt.Printf("  Validator: %s\n", block.Header.Validator)
+	fmt.Printf("  Timestamp: %s\n", block.Header.Timestamp)
+	fmt.Printf("  Parent Hash: %s\n", block.Header.ParentHash)
+	fmt.Printf("  Transactions: %d\n", len(block.Body.Transactions))
+	fmt.Printf("  References: %d\n", len(block.Header.References))
 	return nil
 } 
