@@ -122,23 +122,18 @@ type ConsensusEngine struct {
 	validators    []types.Address
 	waves         map[types.Wave]*WaveState
 	logger        *log.Logger
+	blockProcessor *core.BlockProcessor
 }
 
 // NewConsensusEngine creates a new consensus engine
-func NewConsensusEngine(dag *core.DAG, stateManager *state.StateManager, nodeID types.Address, config *Config) *ConsensusEngine {
+func NewConsensusEngine(config *Config, stateManager *state.StateManager, blockProcessor *core.BlockProcessor) *ConsensusEngine {
 	return &ConsensusEngine{
-		dag:           dag,
-		stateManager:  stateManager,
-		nodeID:        nodeID,
-		config:        config,
-		proposals:     make(map[string]*types.Proposal),
-		validators:    make([]types.Address, 0),
-		waveManager:   NewWaveManager(config),
-		currentWave:   nil,
-		currentRound:  0,
-		currentHeight: 0,
-		waves:         make(map[types.Wave]*WaveState),
-		logger:        log.New(log.Writer(), "[Consensus] ", log.LstdFlags),
+		config:         config,
+		stateManager:   stateManager,
+		blockProcessor: blockProcessor,
+		proposals:      make(map[string]*types.Proposal),
+		waves:          make(map[types.Wave]*WaveState),
+		logger:         log.New(log.Writer(), "[Consensus] ", log.LstdFlags),
 	}
 }
 
@@ -496,35 +491,10 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 	ce.logger.Printf("Creating new block in wave %d, round %d", 
 		ce.currentWave.GetWaveNumber(), ce.currentRound)
 
-	// Create block header
-	header := &types.BlockHeader{
-		Version:    1,
-		Timestamp:  time.Now(),
-		Round:      ce.currentRound,
-		Wave:       ce.currentWave.GetWaveNumber(),
-		Height:     ce.getNextHeight(),
-		ParentHash: ce.getParentHash(),
-		References: ce.selectReferences(),
-		StateRoot:  ce.calculateStateRoot(),
-		Validator:  ce.nodeID,
-	}
-
-	// Create block body
-	body := &types.BlockBody{
-		Transactions: make([]*types.Transaction, 0),
-		Receipts:     make([]*types.Receipt, 0),
-		Events:       make([]*types.Event, 0),
-	}
-
-	// Create block
-	block := &types.Block{
-		Header: header,
-		Body:   body,
-	}
-
-	// Sign block
-	if err := ce.signBlock(block); err != nil {
-		ce.logger.Printf("Failed to sign block: %v", err)
+	// Use BlockProcessor to create block
+	block, err := ce.blockProcessor.CreateBlock(ce.currentRound)
+	if err != nil {
+		ce.logger.Printf("Failed to create block: %v", err)
 		return nil, err
 	}
 

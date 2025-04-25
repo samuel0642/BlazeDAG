@@ -7,28 +7,21 @@ import (
 	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
-// Config represents the consensus configuration
+// Config represents the configuration for the consensus engine
 type Config struct {
-	// WaveTimeout is the maximum duration for a wave
-	WaveTimeout time.Duration
+	TotalValidators int
+	WaveTimeout     time.Duration
+	QuorumSize      int
+	ValidatorSet    []types.Address
 
 	// RoundDuration is the duration of a round
 	RoundDuration time.Duration
-
-	// ValidatorSet is the set of validators
-	ValidatorSet []types.Address
-
-	// QuorumSize is the minimum number of votes required for consensus
-	QuorumSize int
 
 	// ListenAddr is the address to listen for incoming connections
 	ListenAddr types.Address
 
 	// Seeds are the addresses of seed nodes
 	Seeds []types.Address
-
-	// TotalValidators is the total number of validators
-	TotalValidators int
 }
 
 // NewConfig creates a new consensus configuration with default values

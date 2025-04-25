@@ -19,7 +19,7 @@ type Engine struct {
 	stateLock sync.RWMutex
 
 	// Components
-	blockCreator    *BlockCreator
+	blockProcessor  *BlockProcessor
 	consensusEngine *ConsensusEngine
 	networkManager  *NetworkManager
 
@@ -39,9 +39,16 @@ type Config struct {
 
 // NewEngine creates a new BlazeDAG engine
 func NewEngine(config *Config) *Engine {
+	state := NewState()
+	dag := NewDAG()
+	blockProcessor := NewBlockProcessor(config, state, dag)
+	consensusEngine := NewConsensusEngine(config, state)
+
 	return &Engine{
 		config: config,
-		state:  NewState(),
+		state:  state,
+		blockProcessor: blockProcessor,
+		consensusEngine: consensusEngine,
 		blockChan: make(chan *types.Block, 100),
 		consensusChan: make(chan *types.ConsensusMessage, 100),
 		stopChan: make(chan struct{}),
@@ -51,8 +58,6 @@ func NewEngine(config *Config) *Engine {
 // Start initializes and starts the engine
 func (e *Engine) Start() error {
 	// Initialize components
-	e.blockCreator = NewBlockCreator(e.config, e.state)
-	e.consensusEngine = NewConsensusEngine(e.config, e.state)
 	e.networkManager = NewNetworkManager(e.config, e.state)
 
 	// Start components
@@ -84,7 +89,7 @@ func (e *Engine) blockCreationLoop() {
 		select {
 		case <-ticker.C:
 			if e.config.IsValidator {
-				block, err := e.blockCreator.CreateBlock()
+				block, err := e.blockProcessor.CreateBlock(types.Round(e.state.CurrentRound))
 				if err != nil {
 					log.Printf("Failed to create block: %v", err)
 					continue
