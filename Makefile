@@ -1,4 +1,4 @@
-.PHONY: build run clean test
+.PHONY: build run clean test demo-separation
 
 # Build the BlazeDAG binary
 build:
@@ -26,4 +26,9 @@ run-port: build
 
 # Run with genesis file
 run-genesis: build
-	./bin/blazedag --genesis $(genesis) 
+	./bin/blazedag --genesis $(genesis)
+
+# Run the separation demo
+demo-separation:
+	@echo "Running component separation demo..."
+	@go run scripts/demo_separation.go 
