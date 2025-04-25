@@ -66,28 +66,51 @@ func main() {
 	
 	// Create and process blocks continuously with separate round and wave timing
 	round := 1
-	wave := 1
+	wave := types.Wave(1)
+	height := types.BlockNumber(0)
+	lastWave := types.Wave(0)
 	
 	for {
-		// Create a block with current round number
+		// Get transactions from mempool
+		txs := mempool.GetTransactions()
+		
+		// Create a block with current round number and transactions
 		block, err := blockProcessor.CreateBlock(types.Round(round))
 		if err != nil {
 			fmt.Printf("Error creating block: %v\n", err)
 			return
 		}
 
+		// Set block properties
+		block.Header.Wave = wave
+		block.Header.Height = height
+		block.Body.Transactions = txs
+
+		// Show leader selection when wave changes
+		if wave != lastWave {
+			fmt.Printf("\n=== Wave %d Leader Selection ===\n", wave)
+			fmt.Printf("Selected Leader: %s\n", blockConfig.NodeID)
+			fmt.Printf("Validator Set: %v\n", consensusConfig.ValidatorSet)
+			lastWave = wave
+		}
+
 		// Set wave number (increment every 2 rounds)
-		block.Header.Wave = types.Wave(wave)
 		if round % 2 == 0 {
 			wave++
 		}
 
-		fmt.Printf("\nBlock:\n")
+		fmt.Printf("\nBlock from Validator %s:\n", blockConfig.NodeID)
 		fmt.Printf("  Height: %d\n", block.Header.Height)
 		fmt.Printf("  Hash: %x\n", block.ComputeHash())
 		fmt.Printf("  Round: %d\n", block.Header.Round)
 		fmt.Printf("  Wave: %d\n", block.Header.Wave)
 		fmt.Printf("  Transaction Count: %d\n", len(block.Body.Transactions))
+		if len(block.Body.Transactions) > 0 {
+			fmt.Println("  Transactions:")
+			for i, tx := range block.Body.Transactions {
+				fmt.Printf("    %d: From %s to %s, Value: %d\n", i+1, tx.From, tx.To, tx.Value)
+			}
+		}
 
 		// Add block to DAG
 		if err := dag.AddBlock(block); err != nil {
@@ -106,8 +129,9 @@ func main() {
 		stateRoot := stateManager.GetStateRoot()
 		fmt.Printf("  State Root: %x\n", stateRoot)
 
-		// Increment round counter
+		// Increment counters
 		round++
+		height++
 
 		// Sleep to simulate block interval
 		time.Sleep(1 * time.Second)
