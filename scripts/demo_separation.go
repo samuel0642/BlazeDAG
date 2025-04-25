@@ -81,6 +81,25 @@ func main() {
 			return
 		}
 
+		// Select N-f references from previous blocks
+		N := consensusConfig.TotalValidators
+		f := (N - 1) / 3 // Byzantine fault tolerance
+		requiredRefs := N - f
+
+		// Get recent blocks to use as references
+		recentBlocks := dag.GetRecentBlocks(int(requiredRefs))
+		references := make([]*types.Reference, 0)
+		for _, refBlock := range recentBlocks {
+			ref := &types.Reference{
+				BlockHash: refBlock.ComputeHash(),
+				Round:     refBlock.Header.Round,
+				Wave:      refBlock.Header.Wave,
+				Type:      types.ReferenceTypeStandard,
+			}
+			references = append(references, ref)
+		}
+		block.Header.References = references
+
 		// Set block properties
 		block.Header.Wave = wave
 		block.Header.Height = height
@@ -109,6 +128,15 @@ func main() {
 			fmt.Println("  Transactions:")
 			for i, tx := range block.Body.Transactions {
 				fmt.Printf("    %d: From %s to %s, Value: %d\n", i+1, tx.From, tx.To, tx.Value)
+			}
+		}
+
+		// Display block references
+		if len(block.Header.References) > 0 {
+			fmt.Println("  References:")
+			for i, ref := range block.Header.References {
+				fmt.Printf("    %d: Block Hash: %x\n", i+1, ref.BlockHash)
+				fmt.Printf("      Round: %d, Wave: %d\n", ref.Round, ref.Wave)
 			}
 		}
 
