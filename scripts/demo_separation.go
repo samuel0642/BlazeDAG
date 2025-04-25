@@ -64,16 +64,25 @@ func main() {
 
 	fmt.Println("\n=== Creating and Processing Blocks ===")
 	
-	// Create and process multiple blocks
-	for i := 0; i < 3; i++ {
-		// Create a block
-		block, err := blockProcessor.CreateBlock(types.Round(i + 1))
+	// Create and process blocks continuously with separate round and wave timing
+	round := 1
+	wave := 1
+	
+	for {
+		// Create a block with current round number
+		block, err := blockProcessor.CreateBlock(types.Round(round))
 		if err != nil {
 			fmt.Printf("Error creating block: %v\n", err)
 			return
 		}
 
-		fmt.Printf("\nBlock %d:\n", i+1)
+		// Set wave number (increment every 2 rounds)
+		block.Header.Wave = types.Wave(wave)
+		if round % 2 == 0 {
+			wave++
+		}
+
+		fmt.Printf("\nBlock:\n")
 		fmt.Printf("  Height: %d\n", block.Header.Height)
 		fmt.Printf("  Hash: %x\n", block.ComputeHash())
 		fmt.Printf("  Round: %d\n", block.Header.Round)
@@ -96,6 +105,9 @@ func main() {
 		// Verify state update
 		stateRoot := stateManager.GetStateRoot()
 		fmt.Printf("  State Root: %x\n", stateRoot)
+
+		// Increment round counter
+		round++
 
 		// Sleep to simulate block interval
 		time.Sleep(1 * time.Second)
