@@ -117,11 +117,9 @@ func (c *CLI) runChain() {
 			// Update current round
 			c.currentRound = round
 
-			// Increment round and wave
+			// Increment round and wave together
 			round++
-			if round%2 == 0 {
-				wave++
-			}
+			wave = types.Wave(round) // Wave number matches round number
 			height++
 
 			// Sleep to simulate block interval
