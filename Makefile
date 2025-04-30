@@ -3,6 +3,7 @@
 # Build the BlazeDAG binary
 build:
 	go build -o bin/blazedag ./cmd/blazedag
+	./bin/blazedag -config config.validator1.yaml
 
 # Run the BlazeDAG node
 run: build

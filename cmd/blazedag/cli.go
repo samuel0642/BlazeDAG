@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -19,8 +20,11 @@ type CLI struct {
 	config          *config.Config
 	consensusEngine *consensus.ConsensusEngine
 	waveController  *consensus.WaveController
+	blockProcessor  *core.BlockProcessor
+	dag             *core.DAG
 	scanner         *bufio.Scanner
-	engine          *core.Engine
+	stopChan        chan struct{}
+	currentRound    int
 }
 
 // NewCLI creates a new CLI instance
@@ -46,6 +50,9 @@ func (c *CLI) Start() error {
 	// Start wave controller
 	c.waveController.Start()
 
+	// Start block creation and round forwarding
+	go c.runChain()
+
 	// Print welcome message
 	fmt.Println("BlazeDAG CLI - Type 'help' for available commands")
 
@@ -65,16 +72,79 @@ func (c *CLI) Start() error {
 	return nil
 }
 
+// runChain runs the chain with round and wave forwarding
+func (c *CLI) runChain() {
+	round := 1
+	wave := types.Wave(1)
+	height := types.BlockNumber(0)
+	lastWave := types.Wave(0)
+
+	for {
+		select {
+		case <-c.stopChan:
+			return
+		default:
+			// Create a block with current round number
+			block, err := c.blockProcessor.CreateBlock(types.Round(round))
+			if err != nil {
+				log.Printf("Error creating block: %v", err)
+				continue
+			}
+
+			// Set block properties
+			block.Header.Wave = wave
+			block.Header.Height = height
+
+			// Show leader selection when wave changes
+			if wave != lastWave {
+				log.Printf("\n=== Wave %d Leader Selection ===", wave)
+				log.Printf("Selected Leader: %s", c.config.NodeID)
+				lastWave = wave
+			}
+
+			// Add block to DAG
+			if err := c.dag.AddBlock(block); err != nil {
+				log.Printf("Error adding block to DAG: %v", err)
+				continue
+			}
+
+			// Process the block through consensus
+			if err := c.consensusEngine.HandleBlock(block); err != nil {
+				log.Printf("Error processing block: %v", err)
+				continue
+			}
+
+			// Update current round
+			c.currentRound = round
+
+			// Increment round and wave
+			round++
+			if round%2 == 0 {
+				wave++
+			}
+			height++
+
+			// Sleep to simulate block interval
+			time.Sleep(1 * time.Second)
+		}
+	}
+}
+
+// Stop stops the CLI
+func (c *CLI) Stop() {
+	close(c.stopChan)
+	// No need to stop consensus engine as it doesn't have a Stop method
+}
+
 // initialize initializes the CLI components
 func (c *CLI) initialize() error {
 	// Initialize components
 	stateManager := state.NewStateManager()
-	dag := core.NewDAG()
+	c.dag = core.NewDAG()
 	coreState := &core.State{
 		CurrentWave: 0,
 		LatestBlock: nil,
 	}
-	// mempool := core.NewMempool()
 
 	// Create block processor config
 	blockConfig := &core.Config{
@@ -85,7 +155,7 @@ func (c *CLI) initialize() error {
 	}
 	
 	// Create block processor
-	blockProcessor := core.NewBlockProcessor(blockConfig, coreState, dag)
+	c.blockProcessor = core.NewBlockProcessor(blockConfig, coreState, c.dag)
 	
 	// Create consensus config
 	consensusConfig := &consensus.Config{
@@ -96,10 +166,13 @@ func (c *CLI) initialize() error {
 	}
 
 	// Initialize consensus engine
-	c.consensusEngine = consensus.NewConsensusEngine(consensusConfig, stateManager, blockProcessor)
+	c.consensusEngine = consensus.NewConsensusEngine(consensusConfig, stateManager, c.blockProcessor)
 
 	// Create wave controller
 	c.waveController = consensus.NewWaveController(c.consensusEngine, c.config.Consensus.WaveTimeout)
+
+	// Initialize stop channel
+	c.stopChan = make(chan struct{})
 
 	return nil
 }
@@ -151,6 +224,7 @@ func (c *CLI) handleHelp() error {
 // handleStatus shows the current status
 func (c *CLI) handleStatus() error {
 	fmt.Printf("Current wave: %d\n", c.consensusEngine.GetCurrentWave())
+	fmt.Printf("Current round: %d\n", c.currentRound)
 	fmt.Printf("Is leader: %v\n", c.consensusEngine.IsLeader())
 	return nil
 }
