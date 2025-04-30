@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/CrossDAG/BlazeDAG/internal/consensus"
 	"github.com/CrossDAG/BlazeDAG/internal/core"
 	"github.com/CrossDAG/BlazeDAG/internal/state"
+	"github.com/CrossDAG/BlazeDAG/internal/storage"
 	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
@@ -23,6 +25,7 @@ type CLI struct {
 	waveController  *consensus.WaveController
 	blockProcessor  *core.BlockProcessor
 	dag             *core.DAG
+	storage         *storage.Storage
 	scanner         *bufio.Scanner
 	stopChan        chan struct{}
 	currentRound    int
@@ -116,6 +119,11 @@ func (c *CLI) runChain() {
 					continue
 				}
 
+				// Save block to storage
+				if err := c.storage.SaveBlock(block); err != nil {
+					log.Printf("Error saving block: %v", err)
+				}
+
 				// Process the block through consensus
 				if err := c.consensusEngine.HandleBlock(block); err != nil {
 					log.Printf("Error processing block: %v", err)
@@ -129,6 +137,20 @@ func (c *CLI) runChain() {
 				// Increment round and height
 				round++
 				height++
+
+				// Save state
+				engineState := &core.State{
+					CurrentWave: uint64(currentWave),
+					LatestBlock: block,
+					PendingBlocks: make(map[string]*types.Block),
+					FinalizedBlocks: make(map[string]*types.Block),
+					ActiveProposals: make(map[string]*types.Proposal),
+					Votes: make(map[string][]*types.Vote),
+					ConnectedPeers: make(map[types.Address]*types.Peer),
+				}
+				if err := c.storage.SaveState(engineState); err != nil {
+					log.Printf("Error saving state: %v", err)
+				}
 			}
 
 			// Sleep for the configured round duration
@@ -145,13 +167,24 @@ func (c *CLI) Stop() {
 
 // initialize initializes the CLI components
 func (c *CLI) initialize() error {
+	// Initialize storage
+	baseDir := filepath.Join("data", string(c.config.NodeID))
+	storage, err := storage.NewStorage(baseDir)
+	if err != nil {
+		return fmt.Errorf("failed to initialize storage: %v", err)
+	}
+	c.storage = storage
+
+	// Load state from storage
+	engineState, err := storage.LoadState()
+	if err != nil {
+		return fmt.Errorf("failed to load state: %v", err)
+	}
+
 	// Initialize components
+	// accountState := state.NewState()
 	stateManager := state.NewStateManager()
 	c.dag = core.NewDAG()
-	coreState := &core.State{
-		CurrentWave: 1, // Start from wave 1
-		LatestBlock: nil,
-	}
 
 	// Create block processor config
 	blockConfig := &core.Config{
@@ -162,7 +195,16 @@ func (c *CLI) initialize() error {
 	}
 	
 	// Create block processor
-	c.blockProcessor = core.NewBlockProcessor(blockConfig, coreState, c.dag)
+	c.blockProcessor = core.NewBlockProcessor(blockConfig, engineState, c.dag)
+	
+	// Load mempool transactions
+	txs, err := storage.LoadMempool()
+	if err != nil {
+		return fmt.Errorf("failed to load mempool: %v", err)
+	}
+	for _, tx := range txs {
+		c.blockProcessor.AddTransaction(tx)
+	}
 	
 	// Create consensus config
 	consensusConfig := &consensus.Config{
@@ -339,16 +381,17 @@ func (c *CLI) handleSend(args []string) error {
 		return fmt.Errorf("invalid amount: %v", err)
 	}
 
-	// Create transaction with proper type conversion
 	tx := &types.Transaction{
-		From:  from,
-		To:    to,
-		Value: types.Value(amount), // Explicitly convert uint64 to types.Value
-		Nonce: 0, // In a real implementation, you'd get the next nonce from the state
+		From:      from,
+		To:        to,
+		Value:     types.Value(amount),
+		Nonce:     0, // TODO: Get actual nonce from state
+		GasLimit:  21000,
+		GasPrice:  1,
+		Data:      nil,
 	}
 
-	// Add transaction to mempool
 	c.blockProcessor.AddTransaction(tx)
-	fmt.Printf("Transaction sent successfully - From: %x, To: %x, Amount: %d\n", from, to, amount)
+	fmt.Println("Transaction added to mempool")
 	return nil
 } 

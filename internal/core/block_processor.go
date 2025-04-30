@@ -265,4 +265,11 @@ func (bp *BlockProcessor) VerifyCertificate(cert *types.Certificate) error {
 	// TODO: Verify signatures
 	// For now, just return nil
 	return nil
+}
+
+// GetState returns the current state
+func (bp *BlockProcessor) GetState() *State {
+	bp.mu.RLock()
+	defer bp.mu.RUnlock()
+	return bp.state
 } 
