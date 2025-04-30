@@ -150,8 +150,29 @@ func (ce *ConsensusEngine) Start() error {
 	ce.validators = ce.config.ValidatorSet
 	ce.logger.Printf("Initialized validator set with %d validators", len(ce.validators))
 
-	// Start with wave 1
-	ce.currentWave = NewWaveState(1, ce.config.WaveTimeout, ce.config.QuorumSize)
+	// Get current state from block processor
+	state := ce.blockProcessor.GetState()
+	if state != nil {
+		// Start from the last wave and round
+		ce.currentWave = NewWaveState(types.Wave(state.CurrentWave), ce.config.WaveTimeout, ce.config.QuorumSize)
+		ce.currentRound = types.Round(state.CurrentRound)
+		
+		// Only set height if we have a latest block
+		if state.LatestBlock != nil {
+			ce.currentHeight = state.LatestBlock.Header.Height
+		} else {
+			ce.currentHeight = 0
+		}
+		
+		ce.logger.Printf("Resuming from wave %d, round %d, height %d", 
+			ce.currentWave.GetWaveNumber(), ce.currentRound, ce.currentHeight)
+	} else {
+		// Start with wave 1 if no state exists
+		ce.currentWave = NewWaveState(1, ce.config.WaveTimeout, ce.config.QuorumSize)
+		ce.currentRound = 1
+		ce.currentHeight = 0
+		ce.logger.Printf("Starting new chain from wave 1")
+	}
 
 	// Select initial leader
 	ce.selectLeader()
