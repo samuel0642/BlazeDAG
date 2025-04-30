@@ -150,8 +150,8 @@ func (ce *ConsensusEngine) Start() error {
 	ce.validators = ce.config.ValidatorSet
 	ce.logger.Printf("Initialized validator set with %d validators", len(ce.validators))
 
-	// Start with wave 0
-	ce.currentWave = NewWaveState(0, ce.config.WaveTimeout, ce.config.QuorumSize)
+	// Start with wave 1
+	ce.currentWave = NewWaveState(1, ce.config.WaveTimeout, ce.config.QuorumSize)
 
 	// Select initial leader
 	ce.selectLeader()
@@ -168,15 +168,22 @@ func (ce *ConsensusEngine) Start() error {
 
 // waveTimer handles wave timeouts
 func (ce *ConsensusEngine) waveTimer() {
+	lastWaveTime := time.Now()
+	lastWave := types.Wave(1) // Start from wave 1
+
 	for ce.running {
 		time.Sleep(ce.config.WaveTimeout)
 		ce.mu.Lock()
 		if ce.currentWave != nil {
-			// ce.logger.Printf("Wave %d timed out", ce.currentWave.GetWaveNumber())
-			ce.currentWave = NewWaveState(ce.currentWave.GetWaveNumber()+1, ce.config.WaveTimeout, ce.config.QuorumSize)
-			ce.selectLeader()
-			// ce.logger.Printf("Selected new leader for wave %d: %s", 
-			// 	ce.currentWave.GetWaveNumber(), ce.currentLeader)
+			// Only increment wave if the wave timeout has elapsed and we're on the expected wave
+			if time.Since(lastWaveTime) >= ce.config.WaveTimeout && ce.currentWave.GetWaveNumber() == lastWave {
+				oldWave := ce.currentWave.GetWaveNumber()
+				ce.currentWave = NewWaveState(ce.currentWave.GetWaveNumber()+1, ce.config.WaveTimeout, ce.config.QuorumSize)
+				ce.selectLeader()
+				ce.logger.Printf("Wave forwarded from %d to %d", oldWave, ce.currentWave.GetWaveNumber())
+				lastWaveTime = time.Now()
+				lastWave = ce.currentWave.GetWaveNumber()
+			}
 		}
 		ce.mu.Unlock()
 	}
