@@ -20,6 +20,7 @@ type CLI struct {
 	consensusEngine *consensus.ConsensusEngine
 	waveController  *consensus.WaveController
 	scanner         *bufio.Scanner
+	engine          *core.Engine
 }
 
 // NewCLI creates a new CLI instance
@@ -66,23 +67,36 @@ func (c *CLI) Start() error {
 
 // initialize initializes the CLI components
 func (c *CLI) initialize() error {
-	// Create DAG
-	dag := core.NewDAG()
-
-	// Create state manager
+	// Initialize components
 	stateManager := state.NewStateManager()
+	dag := core.NewDAG()
+	coreState := &core.State{
+		CurrentWave: 0,
+		LatestBlock: nil,
+	}
+	// mempool := core.NewMempool()
 
-	// Create consensus engine
+	// Create block processor config
+	blockConfig := &core.Config{
+		BlockInterval:    1 * time.Second,
+		ConsensusTimeout: 5 * time.Second,
+		IsValidator:      true,
+		NodeID:          c.config.NodeID,
+	}
+	
+	// Create block processor
+	blockProcessor := core.NewBlockProcessor(blockConfig, coreState, dag)
+	
+	// Create consensus config
 	consensusConfig := &consensus.Config{
-		WaveTimeout:   c.config.Consensus.WaveTimeout,
-		RoundDuration: c.config.Consensus.RoundDuration,
-		ValidatorSet:  c.config.Consensus.ValidatorSet,
-		QuorumSize:    c.config.Consensus.QuorumSize,
-		ListenAddr:    c.config.Consensus.ListenAddr,
-		Seeds:         c.config.Consensus.Seeds,
+		TotalValidators: 3,
+		WaveTimeout:     5 * time.Second,
+		QuorumSize:      2,
+		ValidatorSet:    []types.Address{c.config.NodeID, types.Address("validator2"), types.Address("validator3")},
 	}
 
-	c.consensusEngine = consensus.NewConsensusEngine(dag, stateManager, c.config.NodeID, consensusConfig)
+	// Initialize consensus engine
+	c.consensusEngine = consensus.NewConsensusEngine(consensusConfig, stateManager, blockProcessor)
 
 	// Create wave controller
 	c.waveController = consensus.NewWaveController(c.consensusEngine, c.config.Consensus.WaveTimeout)
@@ -134,7 +148,7 @@ func (c *CLI) handleHelp() error {
 	return nil
 }
 
-// handleStatus handles the status command
+// handleStatus shows the current status
 func (c *CLI) handleStatus() error {
 	fmt.Printf("Current wave: %d\n", c.consensusEngine.GetCurrentWave())
 	fmt.Printf("Is leader: %v\n", c.consensusEngine.IsLeader())
