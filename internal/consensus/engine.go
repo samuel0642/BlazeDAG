@@ -172,11 +172,11 @@ func (ce *ConsensusEngine) waveTimer() {
 		time.Sleep(ce.config.WaveTimeout)
 		ce.mu.Lock()
 		if ce.currentWave != nil {
-			ce.logger.Printf("Wave %d timed out", ce.currentWave.GetWaveNumber())
+			// ce.logger.Printf("Wave %d timed out", ce.currentWave.GetWaveNumber())
 			ce.currentWave = NewWaveState(ce.currentWave.GetWaveNumber()+1, ce.config.WaveTimeout, ce.config.QuorumSize)
 			ce.selectLeader()
-			ce.logger.Printf("Selected new leader for wave %d: %s", 
-				ce.currentWave.GetWaveNumber(), ce.currentLeader)
+			// ce.logger.Printf("Selected new leader for wave %d: %s", 
+			// 	ce.currentWave.GetWaveNumber(), ce.currentLeader)
 		}
 		ce.mu.Unlock()
 	}
@@ -192,8 +192,8 @@ func (ce *ConsensusEngine) selectLeader() {
 	// Select leader based on wave number
 	leaderIndex := int(ce.currentWave.GetWaveNumber()) % len(ce.validators)
 	ce.currentLeader = ce.validators[leaderIndex]
-	ce.logger.Printf("Selected leader %s for wave %d", 
-		ce.currentLeader, ce.currentWave.GetWaveNumber())
+	// ce.logger.Printf("Selected leader %s for wave %d", 
+	// 	ce.currentLeader, ce.currentWave.GetWaveNumber())
 }
 
 // IsLeader checks if the current node is the leader
@@ -314,7 +314,7 @@ func (ce *ConsensusEngine) ProcessTimeout() {
 	}
 
 	if ce.currentWave.IsTimedOut() {
-		ce.logger.Printf("Wave %d timed out", ce.currentWave.GetWaveNumber())
+		// ce.logger.Printf("Wave %d timed out", ce.currentWave.GetWaveNumber())
 		ce.currentWave.SetStatus(types.WaveStatusFailed)
 		ce.currentWave = NewWaveState(ce.currentWave.GetWaveNumber()+1, ce.config.WaveTimeout, ce.config.QuorumSize)
 		ce.selectLeader()

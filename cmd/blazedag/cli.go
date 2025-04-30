@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -75,55 +76,63 @@ func (c *CLI) Start() error {
 // runChain runs the chain with round and wave forwarding
 func (c *CLI) runChain() {
 	round := 1
-	wave := types.Wave(1)
 	height := types.BlockNumber(0)
 	lastWave := types.Wave(0)
+	blockCreatedInWave := false
 
 	for {
 		select {
 		case <-c.stopChan:
 			return
 		default:
-			// Create a block with current round number
-			block, err := c.blockProcessor.CreateBlock(types.Round(round))
-			if err != nil {
-				log.Printf("Error creating block: %v", err)
-				continue
+			// Get current wave from consensus engine
+			currentWave := c.consensusEngine.GetCurrentWave()
+			
+			// Only create block if we're in a new wave and haven't created a block yet
+			if currentWave != lastWave {
+				blockCreatedInWave = false
+				lastWave = currentWave
 			}
 
-			// Set block properties
-			block.Header.Wave = wave
-			block.Header.Height = height
+			if !blockCreatedInWave {
+				// Create a block with current round number
+				block, err := c.blockProcessor.CreateBlock(types.Round(round))
+				if err != nil {
+					log.Printf("Error creating block: %v", err)
+					continue
+				}
 
-			// Show leader selection when wave changes
-			if wave != lastWave {
-				log.Printf("\n=== Wave %d Leader Selection ===", wave)
+				// Set block properties
+				block.Header.Wave = currentWave
+				block.Header.Height = height
+
+				// Show leader selection when wave changes
+				log.Printf("\n=== Wave %d Leader Selection ===", currentWave)
 				log.Printf("Selected Leader: %s", c.config.NodeID)
-				lastWave = wave
+
+				// Add block to DAG
+				if err := c.dag.AddBlock(block); err != nil {
+					log.Printf("Error adding block to DAG: %v", err)
+					continue
+				}
+
+				// Process the block through consensus
+				if err := c.consensusEngine.HandleBlock(block); err != nil {
+					log.Printf("Error processing block: %v", err)
+					continue
+				}
+
+				// Update current round and mark block as created
+				c.currentRound = round
+				blockCreatedInWave = true
+
+				// Increment round and height
+				round++
+				height++
 			}
 
-			// Add block to DAG
-			if err := c.dag.AddBlock(block); err != nil {
-				log.Printf("Error adding block to DAG: %v", err)
-				continue
-			}
-
-			// Process the block through consensus
-			if err := c.consensusEngine.HandleBlock(block); err != nil {
-				log.Printf("Error processing block: %v", err)
-				continue
-			}
-
-			// Update current round
-			c.currentRound = round
-
-			// Increment round and wave together
-			round++
-			wave = types.Wave(round) // Wave number matches round number
-			height++
-
-			// Sleep to simulate block interval
-			time.Sleep(1 * time.Second)
+			// Sleep for the configured round duration
+			time.Sleep(c.config.Consensus.RoundDuration)
 		}
 	}
 }
@@ -158,7 +167,7 @@ func (c *CLI) initialize() error {
 	// Create consensus config
 	consensusConfig := &consensus.Config{
 		TotalValidators: 3,
-		WaveTimeout:     5 * time.Second,
+		WaveTimeout:     c.config.Consensus.WaveTimeout,
 		QuorumSize:      2,
 		ValidatorSet:    []types.Address{c.config.NodeID, types.Address("validator2"), types.Address("validator3")},
 	}
@@ -198,6 +207,8 @@ func (c *CLI) handleCommand(line string) error {
 		return c.handleBlocks(args)
 	case "block":
 		return c.handleBlock(args)
+	case "send":
+		return c.handleSend(args)
 	case "exit":
 		os.Exit(0)
 		return nil
@@ -215,6 +226,7 @@ func (c *CLI) handleHelp() error {
 	fmt.Println("  vote    - Vote on a proposal")
 	fmt.Println("  blocks  - List recent blocks")
 	fmt.Println("  block   - Show block details")
+	fmt.Println("  send    - Send a transaction (send <from> <to> <amount>)")
 	fmt.Println("  exit    - Exit the CLI")
 	return nil
 }
@@ -311,5 +323,32 @@ func (c *CLI) handleBlock(args []string) error {
 	fmt.Printf("  Parent Hash: %s\n", block.Header.ParentHash)
 	fmt.Printf("  Transactions: %d\n", len(block.Body.Transactions))
 	fmt.Printf("  References: %d\n", len(block.Header.References))
+	return nil
+}
+
+// handleSend handles the send command
+func (c *CLI) handleSend(args []string) error {
+	if len(args) != 3 {
+		return fmt.Errorf("usage: send <from> <to> <amount>")
+	}
+
+	from := types.Address(args[0])
+	to := types.Address(args[1])
+	amount, err := strconv.ParseUint(args[2], 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid amount: %v", err)
+	}
+
+	// Create transaction with proper type conversion
+	tx := &types.Transaction{
+		From:  from,
+		To:    to,
+		Value: types.Value(amount), // Explicitly convert uint64 to types.Value
+		Nonce: 0, // In a real implementation, you'd get the next nonce from the state
+	}
+
+	// Add transaction to mempool
+	c.blockProcessor.AddTransaction(tx)
+	fmt.Printf("Transaction sent successfully - From: %x, To: %x, Amount: %d\n", from, to, amount)
 	return nil
 } 
