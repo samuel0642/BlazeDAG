@@ -77,7 +77,7 @@ func (c *CLI) Start() error {
 func (c *CLI) runChain() {
 	round := 1
 	height := types.BlockNumber(0)
-	lastWave := types.Wave(0)
+	lastWave := types.Wave(1) // Start from wave 1
 	blockCreatedInWave := false
 
 	for {
@@ -149,7 +149,7 @@ func (c *CLI) initialize() error {
 	stateManager := state.NewStateManager()
 	c.dag = core.NewDAG()
 	coreState := &core.State{
-		CurrentWave: 0,
+		CurrentWave: 1, // Start from wave 1
 		LatestBlock: nil,
 	}
 
