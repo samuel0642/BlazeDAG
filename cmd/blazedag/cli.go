@@ -5,37 +5,38 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
+	"os/signal"
 	"strconv"
-	"strings"
+	"syscall"
 	"time"
 
-	"github.com/CrossDAG/BlazeDAG/internal/config"
 	"github.com/CrossDAG/BlazeDAG/internal/consensus"
-	"github.com/CrossDAG/BlazeDAG/internal/core"
 	"github.com/CrossDAG/BlazeDAG/internal/state"
-	"github.com/CrossDAG/BlazeDAG/internal/storage"
+	"github.com/CrossDAG/BlazeDAG/internal/core"
 	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
 // CLI represents the command line interface
 type CLI struct {
-	config          *config.Config
-	consensusEngine *consensus.ConsensusEngine
-	waveController  *consensus.WaveController
+	config          *consensus.Config
+	stateManager    *state.StateManager
 	blockProcessor  *core.BlockProcessor
-	dag             *core.DAG
-	storage         *storage.Storage
+	consensusEngine *consensus.ConsensusEngine
+	logger          *log.Logger
 	scanner         *bufio.Scanner
 	stopChan        chan struct{}
 	currentRound    int
+	approvedBlocks  map[string]bool // Changed from types.Hash to string
 }
 
 // NewCLI creates a new CLI instance
-func NewCLI(cfg *config.Config) *CLI {
+func NewCLI(config *consensus.Config) *CLI {
 	return &CLI{
-		config:  cfg,
-		scanner: bufio.NewScanner(os.Stdin),
+		config:         config,
+		scanner:        bufio.NewScanner(os.Stdin),
+		logger:         log.New(os.Stdout, "", log.LstdFlags),
+		stopChan:       make(chan struct{}),
+		approvedBlocks: make(map[string]bool),
 	}
 }
 
@@ -51,29 +52,21 @@ func (c *CLI) Start() error {
 		return fmt.Errorf("failed to start consensus engine: %v", err)
 	}
 
-	// Start wave controller
-	c.waveController.Start()
-
 	// Start block creation and round forwarding
 	go c.runChain()
 
-	// Print welcome message
-	fmt.Println("BlazeDAG CLI - Type 'help' for available commands")
+	// Handle signals
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		c.Stop()
+		os.Exit(0)
+	}()
 
-	// Main loop
-	for {
-		fmt.Print("> ")
-		if !c.scanner.Scan() {
-			break
-		}
-
-		line := c.scanner.Text()
-		if err := c.handleCommand(line); err != nil {
-			fmt.Printf("Error: %v\n", err)
-		}
-	}
-
-	return nil
+	// Start CLI loop
+	c.logger.Printf("BlazeDAG CLI - Type 'help' for available commands")
+	return c.run()
 }
 
 // runChain runs the chain with round and wave forwarding
@@ -99,6 +92,7 @@ func (c *CLI) runChain() {
 
 			if !blockCreatedInWave {
 				// Create a block with current round number
+				fmt.Printf("1111111111")
 				block, err := c.blockProcessor.CreateBlock(types.Round(round))
 				if err != nil {
 					log.Printf("Error creating block: %v", err)
@@ -113,22 +107,25 @@ func (c *CLI) runChain() {
 				log.Printf("\n=== Wave %d Leader Selection ===", currentWave)
 				log.Printf("Selected Leader: %s", c.config.NodeID)
 
-				// Add block to DAG
-				if err := c.dag.AddBlock(block); err != nil {
-					log.Printf("Error adding block to DAG: %v", err)
-					continue
-				}
-
-				// Save block to storage
-				if err := c.storage.SaveBlock(block); err != nil {
-					log.Printf("Error saving block: %v", err)
-				}
-
 				// Process the block through consensus
 				if err := c.consensusEngine.HandleBlock(block); err != nil {
 					log.Printf("Error processing block: %v", err)
 					continue
 				}
+
+				// Check block approval status
+				blockHash := block.ComputeHash()
+				isApproved := c.consensusEngine.IsBlockApproved(blockHash)
+				c.approvedBlocks[string(blockHash)] = isApproved
+
+				// Log block status
+				log.Printf("Block Status:")
+				log.Printf("  Hash: %s", blockHash)
+				log.Printf("  Wave: %d", currentWave)
+				log.Printf("  Round: %d", round)
+				log.Printf("  Height: %d", height)
+				log.Printf("  Approved: %v", isApproved)
+				log.Printf("  Votes: %d/%d", c.consensusEngine.GetBlockVotes(blockHash), c.config.QuorumSize)
 
 				// Update current round and mark block as created
 				c.currentRound = round
@@ -137,24 +134,10 @@ func (c *CLI) runChain() {
 				// Increment round and height
 				round++
 				height++
-
-				// Save state
-				engineState := &core.State{
-					CurrentWave: uint64(currentWave),
-					LatestBlock: block,
-					PendingBlocks: make(map[string]*types.Block),
-					FinalizedBlocks: make(map[string]*types.Block),
-					ActiveProposals: make(map[string]*types.Proposal),
-					Votes: make(map[string][]*types.Vote),
-					ConnectedPeers: make(map[types.Address]*types.Peer),
-				}
-				if err := c.storage.SaveState(engineState); err != nil {
-					log.Printf("Error saving state: %v", err)
-				}
 			}
 
 			// Sleep for the configured round duration
-			time.Sleep(c.config.Consensus.RoundDuration)
+			time.Sleep(c.config.RoundDuration)
 		}
 	}
 }
@@ -167,100 +150,79 @@ func (c *CLI) Stop() {
 
 // initialize initializes the CLI components
 func (c *CLI) initialize() error {
-	// Initialize storage
-	baseDir := filepath.Join("data", string(c.config.NodeID))
-	storage, err := storage.NewStorage(baseDir)
-	if err != nil {
-		return fmt.Errorf("failed to initialize storage: %v", err)
-	}
-	c.storage = storage
-
-	// Load state from storage
-	engineState, err := storage.LoadState()
-	if err != nil {
-		return fmt.Errorf("failed to load state: %v", err)
-	}
-
-	// Initialize components
-	// accountState := state.NewState()
-	stateManager := state.NewStateManager()
-	c.dag = core.NewDAG()
+	// Initialize state manager
+	c.stateManager = state.NewStateManager()
 
 	// Create block processor config
 	blockConfig := &core.Config{
 		BlockInterval:    1 * time.Second,
 		ConsensusTimeout: 5 * time.Second,
 		IsValidator:      true,
-		NodeID:          c.config.NodeID,
+		NodeID:          types.Address(c.config.NodeID),
 	}
-	
-	// Create block processor
-	c.blockProcessor = core.NewBlockProcessor(blockConfig, engineState, c.dag)
-	
-	// Load mempool transactions
-	txs, err := storage.LoadMempool()
-	if err != nil {
-		return fmt.Errorf("failed to load mempool: %v", err)
+
+	// Create DAG
+	dag := core.NewDAG()
+
+	// Create initial state
+	initialState := &core.State{
+		CurrentWave:      1,
+		LatestBlock:      nil,
+		PendingBlocks:    make(map[string]*types.Block),
+		FinalizedBlocks:  make(map[string]*types.Block),
+		ActiveProposals:  make(map[string]*types.Proposal),
+		Votes:           make(map[string][]*types.Vote),
+		ConnectedPeers:  make(map[types.Address]*types.Peer),
 	}
-	for _, tx := range txs {
-		c.blockProcessor.AddTransaction(tx)
-	}
-	
-	// Create consensus config
-	consensusConfig := &consensus.Config{
-		TotalValidators: 3,
-		WaveTimeout:     c.config.Consensus.WaveTimeout,
-		QuorumSize:      2,
-		ValidatorSet:    []types.Address{c.config.NodeID, types.Address("validator2"), types.Address("validator3")},
-	}
+
+	// Initialize block processor
+	c.blockProcessor = core.NewBlockProcessor(blockConfig, initialState, dag)
 
 	// Initialize consensus engine
-	c.consensusEngine = consensus.NewConsensusEngine(consensusConfig, stateManager, c.blockProcessor)
-
-	// Create wave controller
-	c.waveController = consensus.NewWaveController(c.consensusEngine, c.config.Consensus.WaveTimeout)
-
-	// Initialize stop channel
-	c.stopChan = make(chan struct{})
+	c.consensusEngine = consensus.NewConsensusEngine(c.config, c.stateManager, c.blockProcessor)
 
 	return nil
 }
 
-// handleCommand handles a command
-func (c *CLI) handleCommand(line string) error {
-	parts := strings.Fields(line)
-	if len(parts) == 0 {
-		return nil
-	}
+// run runs the CLI loop
+func (c *CLI) run() error {
+	for {
+		// Read command
+		var cmd string
+		fmt.Print("> ")
+		if !c.scanner.Scan() {
+			continue
+		}
 
-	cmd := parts[0]
-	args := parts[1:]
+		cmd = c.scanner.Text()
 
-	switch cmd {
-	case "help":
-		return c.handleHelp()
-	case "status":
-		return c.handleStatus()
-	case "propose":
-		return c.handlePropose(args)
-	case "vote":
-		return c.handleVote(args)
-	case "blocks":
-		return c.handleBlocks(args)
-	case "block":
-		return c.handleBlock(args)
-	case "send":
-		return c.handleSend(args)
-	case "exit":
-		os.Exit(0)
-		return nil
-	default:
-		return fmt.Errorf("unknown command: %s", cmd)
+		// Handle command
+		switch cmd {
+		case "help":
+			c.printHelp()
+		case "status":
+			c.handleStatus()
+		case "propose":
+			c.handlePropose()
+		case "vote":
+			c.handleVote()
+		case "blocks":
+			c.handleBlocks()
+		case "block":
+			c.handleBlock()
+		case "send":
+			c.handleSend()
+		case "exit":
+			c.Stop()
+			return nil
+		default:
+			c.logger.Printf("Unknown command: %s", cmd)
+		}
 	}
 }
 
-// handleHelp handles the help command
-func (c *CLI) handleHelp() error {
+// printHelp prints the help message
+func (c *CLI) printHelp() {
 	fmt.Println("Available commands:")
 	fmt.Println("  help    - Show this help message")
 	fmt.Println("  status  - Show current status")
@@ -270,7 +232,6 @@ func (c *CLI) handleHelp() error {
 	fmt.Println("  block   - Show block details")
 	fmt.Println("  send    - Send a transaction (send <from> <to> <amount>)")
 	fmt.Println("  exit    - Exit the CLI")
-	return nil
 }
 
 // handleStatus shows the current status
@@ -282,7 +243,7 @@ func (c *CLI) handleStatus() error {
 }
 
 // handlePropose handles the propose command
-func (c *CLI) handlePropose(args []string) error {
+func (c *CLI) handlePropose() error {
 	if !c.consensusEngine.IsLeader() {
 		return fmt.Errorf("only the leader can propose blocks")
 	}
@@ -301,15 +262,15 @@ func (c *CLI) handlePropose(args []string) error {
 }
 
 // handleVote handles the vote command
-func (c *CLI) handleVote(args []string) error {
-	if len(args) != 1 {
-		return fmt.Errorf("usage: vote <proposal_id>")
+func (c *CLI) handleVote() error {
+	if !c.consensusEngine.IsLeader() {
+		return fmt.Errorf("only the leader can vote")
 	}
 
-	proposalID := args[0]
+	proposalID := c.config.NodeID
 	vote := &types.Vote{
 		ProposalID: types.Hash(proposalID),
-		Validator:  c.config.NodeID,
+		Validator:  types.Address(c.config.NodeID),
 		Timestamp:  time.Now(),
 	}
 
@@ -322,14 +283,8 @@ func (c *CLI) handleVote(args []string) error {
 }
 
 // handleBlocks handles the blocks command
-func (c *CLI) handleBlocks(args []string) error {
+func (c *CLI) handleBlocks() error {
 	count := 10 // Default to showing 10 most recent blocks
-	if len(args) > 0 {
-		if _, err := fmt.Sscanf(args[0], "%d", &count); err != nil {
-			return fmt.Errorf("invalid count: %v", err)
-		}
-	}
-
 	blocks := c.consensusEngine.GetRecentBlocks(count)
 	if len(blocks) == 0 {
 		fmt.Println("No blocks found")
@@ -338,21 +293,28 @@ func (c *CLI) handleBlocks(args []string) error {
 
 	fmt.Printf("Recent blocks (showing %d):\n", len(blocks))
 	for _, block := range blocks {
-		fmt.Printf("Height: %d, Hash: %s, Validator: %s\n",
+		blockHash := block.ComputeHash()
+		isApproved := c.approvedBlocks[string(blockHash)]
+		votes := c.consensusEngine.GetBlockVotes(blockHash)
+		
+		fmt.Printf("Height: %d, Hash: %s, Validator: %s, Approved: %v, Votes: %d/%d\n",
 			block.Header.Height,
-			block.ComputeHash(),
-			block.Header.Validator)
+			blockHash,
+			block.Header.Validator,
+			isApproved,
+			votes,
+			c.config.QuorumSize)
 	}
 	return nil
 }
 
 // handleBlock handles the block command
-func (c *CLI) handleBlock(args []string) error {
-	if len(args) != 1 {
-		return fmt.Errorf("usage: block <block_hash>")
+func (c *CLI) handleBlock() error {
+	if !c.consensusEngine.IsLeader() {
+		return fmt.Errorf("only the leader can show block details")
 	}
 
-	block, err := c.consensusEngine.GetBlock(types.Hash(args[0]))
+	block, err := c.consensusEngine.GetBlock(types.Hash(string(c.config.NodeID)))
 	if err != nil {
 		return fmt.Errorf("failed to get block: %v", err)
 	}
@@ -369,14 +331,14 @@ func (c *CLI) handleBlock(args []string) error {
 }
 
 // handleSend handles the send command
-func (c *CLI) handleSend(args []string) error {
-	if len(args) != 3 {
-		return fmt.Errorf("usage: send <from> <to> <amount>")
+func (c *CLI) handleSend() error {
+	if !c.consensusEngine.IsLeader() {
+		return fmt.Errorf("only the leader can send transactions")
 	}
 
-	from := types.Address(args[0])
-	to := types.Address(args[1])
-	amount, err := strconv.ParseUint(args[2], 10, 64)
+	from := types.Address(c.config.NodeID)
+	to := types.Address(c.config.NodeID)
+	amount, err := strconv.ParseUint(c.config.NodeID, 10, 64)
 	if err != nil {
 		return fmt.Errorf("invalid amount: %v", err)
 	}

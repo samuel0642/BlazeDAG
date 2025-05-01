@@ -2,26 +2,90 @@ package consensus
 
 import (
 	"fmt"
+	"io/ioutil"
 	"time"
 
 	"github.com/CrossDAG/BlazeDAG/internal/types"
+	"gopkg.in/yaml.v2"
 )
 
-// Config represents the configuration for the consensus engine
+// Config represents the consensus configuration
 type Config struct {
+	NodeID         string
+	WaveTimeout    time.Duration
+	RoundDuration  time.Duration
+	ValidatorSet   []types.Address
+	QuorumSize     int
+	ListenAddr     types.Address
+	Seeds          []types.Address
 	TotalValidators int
-	WaveTimeout     time.Duration
-	QuorumSize      int
-	ValidatorSet    []types.Address
+}
 
-	// RoundDuration is the duration of a round
-	RoundDuration time.Duration
+// LoadConfig loads the consensus configuration from a file
+func LoadConfig(path string) (*Config, error) {
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %v", err)
+	}
 
-	// ListenAddr is the address to listen for incoming connections
-	ListenAddr types.Address
+	var config struct {
+		NodeID string `yaml:"node_id"`
+		Consensus struct {
+			WaveTimeout    string   `yaml:"wave_timeout"`
+			RoundDuration  string   `yaml:"round_duration"`
+			ValidatorSet   []string `yaml:"validator_set"`
+			QuorumSize     int      `yaml:"quorum_size"`
+			ListenAddr     string   `yaml:"listen_addr"`
+			Seeds          []string `yaml:"seeds"`
+			TotalValidators int     `yaml:"total_validators"`
+		} `yaml:"consensus"`
+	}
 
-	// Seeds are the addresses of seed nodes
-	Seeds []types.Address
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %v", err)
+	}
+
+	// Parse durations
+	waveTimeout, err := time.ParseDuration(config.Consensus.WaveTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("invalid wave timeout: %v", err)
+	}
+
+	roundDuration, err := time.ParseDuration(config.Consensus.RoundDuration)
+	if err != nil {
+		return nil, fmt.Errorf("invalid round duration: %v", err)
+	}
+
+	// Convert validator set to Address type
+	validatorSet := make([]types.Address, len(config.Consensus.ValidatorSet))
+	for i, v := range config.Consensus.ValidatorSet {
+		validatorSet[i] = types.Address(v)
+	}
+
+	// Convert seeds to Address type
+	seeds := make([]types.Address, len(config.Consensus.Seeds))
+	for i, s := range config.Consensus.Seeds {
+		seeds[i] = types.Address(s)
+	}
+
+	// Validate required fields
+	if config.NodeID == "" {
+		return nil, fmt.Errorf("node_id is required")
+	}
+	if config.Consensus.ListenAddr == "" {
+		return nil, fmt.Errorf("listen_addr is required")
+	}
+
+	return &Config{
+		NodeID:         config.NodeID,
+		WaveTimeout:    waveTimeout,
+		RoundDuration:  roundDuration,
+		ValidatorSet:   validatorSet,
+		QuorumSize:     config.Consensus.QuorumSize,
+		ListenAddr:     types.Address(config.Consensus.ListenAddr),
+		Seeds:          seeds,
+		TotalValidators: config.Consensus.TotalValidators,
+	}, nil
 }
 
 // NewConfig creates a new consensus configuration with default values

@@ -86,6 +86,23 @@ func (bp *BlockProcessor) CreateBlock(round types.Round) (*types.Block, error) {
 	txs := bp.mempool.GetTransactions()
 	log.Printf("Creating new block with %d transactions for round %d", len(txs), round)
 
+	// Get latest blocks from other validators
+	latestBlocks := bp.dag.GetRecentBlocks(10) // Get 10 most recent blocks
+	references := make([]*types.Reference, 0, len(latestBlocks))
+
+	// Create references to other validators' blocks
+	for _, block := range latestBlocks {
+		// Only reference blocks from other validators
+		if string(block.Header.Validator) != string(bp.config.NodeID) {
+			references = append(references, &types.Reference{
+				BlockHash: block.ComputeHash(),
+				Round:     block.Header.Round,
+				Wave:      block.Header.Wave,
+				Type:      types.ReferenceTypeStandard,
+			})
+		}
+	}
+
 	// Create block header
 	header := &types.BlockHeader{
 		Version:    1,
@@ -94,7 +111,7 @@ func (bp *BlockProcessor) CreateBlock(round types.Round) (*types.Block, error) {
 		Wave:       types.Wave(bp.state.CurrentWave),
 		Height:     types.BlockNumber(bp.getNextHeight()),
 		ParentHash: bp.getParentHash(),
-		References: bp.selectReferences(),
+		References: references,
 		StateRoot:  bp.calculateStateRoot(txs),
 		Validator:  bp.config.NodeID,
 	}
@@ -119,7 +136,7 @@ func (bp *BlockProcessor) CreateBlock(round types.Round) (*types.Block, error) {
 
 	// Remove processed transactions from mempool
 	bp.mempool.RemoveTransactions(txs)
-	log.Printf("Block created successfully with %d transactions", len(txs))
+	log.Printf("Block created successfully with %d transactions and %d references", len(txs), len(references))
 
 	return block, nil
 }
@@ -138,24 +155,6 @@ func (bp *BlockProcessor) getParentHash() types.Hash {
 		return types.Hash{}
 	}
 	return bp.state.LatestBlock.ComputeHash()
-}
-
-// selectReferences selects references for the new block
-func (bp *BlockProcessor) selectReferences() []*types.Reference {
-	// Get latest blocks from DAG
-	latestBlocks := bp.dag.GetRecentBlocks(10) // Get 10 most recent blocks
-	references := make([]*types.Reference, 0, len(latestBlocks))
-
-	for _, block := range latestBlocks {
-		references = append(references, &types.Reference{
-			BlockHash: block.ComputeHash(),
-			Round:     block.Header.Round,
-			Wave:      block.Header.Wave,
-			Type:      types.ReferenceTypeStandard,
-		})
-	}
-
-	return references
 }
 
 // calculateStateRoot calculates the state root based on transactions

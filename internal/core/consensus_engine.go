@@ -26,6 +26,9 @@ func (ce *ConsensusEngine) ProcessBlock(block *types.Block) {
 	// Create proposal
 	proposal := ce.createProposal(block)
 
+	// Add block to pending blocks
+	ce.state.PendingBlocks[string(block.ComputeHash())] = block
+
 	// Broadcast proposal
 	ce.broadcastProposal(proposal)
 
@@ -104,6 +107,9 @@ func (ce *ConsensusEngine) handleProposal(proposal *types.Proposal) {
 	if !ce.validateProposal(proposal) {
 		return
 	}
+
+	// Add block to pending blocks
+	ce.state.PendingBlocks[string(proposal.Block.ComputeHash())] = proposal.Block
 
 	// Track proposal
 	ce.trackProposal(proposal)
@@ -186,7 +192,23 @@ func (ce *ConsensusEngine) createComplaint(proposal *types.Proposal) *types.Comp
 }
 
 func (ce *ConsensusEngine) validateProposal(proposal *types.Proposal) bool {
-	// TODO: Implement proposal validation
+	// Check if block is valid
+	if proposal.Block == nil {
+		return false
+	}
+
+	// Check if block has valid references
+	for _, ref := range proposal.Block.Header.References {
+		// Check if referenced block exists
+		if _, exists := ce.state.PendingBlocks[string(ref.BlockHash)]; !exists {
+			if _, exists := ce.state.FinalizedBlocks[string(ref.BlockHash)]; !exists {
+				return false
+			}
+		}
+	}
+
+	// Check if block is from a valid validator
+	// TODO: Implement proper validator set validation
 	return true
 }
 
@@ -214,8 +236,19 @@ func (ce *ConsensusEngine) isProposalPending(proposalID types.Hash) bool {
 }
 
 func (ce *ConsensusEngine) hasQuorum(proposalID types.Hash) bool {
-	// TODO: Implement quorum check
-	return len(ce.state.Votes[string(proposalID)]) >= 2 // For testing, require at least 2 votes
+	votes := ce.state.Votes[string(proposalID)]
+	if len(votes) == 0 {
+		return false
+	}
+
+	// Count unique validators that voted
+	validators := make(map[types.Address]bool)
+	for _, vote := range votes {
+		validators[vote.Validator] = true
+	}
+
+	// For testing, require at least 2 validators to vote
+	return len(validators) >= 2
 }
 
 func (ce *ConsensusEngine) finalizeProposal(proposalID types.Hash) {
@@ -228,10 +261,16 @@ func (ce *ConsensusEngine) finalizeProposal(proposalID types.Hash) {
 	proposal.Status = types.ProposalStatusCommitted
 
 	// Add block to finalized blocks
-	ce.state.FinalizedBlocks[string(proposal.Block.Header.ParentHash)] = proposal.Block
+	blockHash := string(proposal.Block.ComputeHash())
+	ce.state.FinalizedBlocks[blockHash] = proposal.Block
 
-	// Update latest block
-	ce.state.LatestBlock = proposal.Block
+	// Remove from pending blocks
+	delete(ce.state.PendingBlocks, blockHash)
+
+	// Update latest block if this block is newer
+	if ce.state.LatestBlock == nil || proposal.Block.Header.Height > ce.state.LatestBlock.Header.Height {
+		ce.state.LatestBlock = proposal.Block
+	}
 
 	// Increment round
 	ce.state.CurrentRound++

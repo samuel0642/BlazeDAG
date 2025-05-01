@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"	
 	"log"
+	"fmt"
 
 	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
@@ -89,6 +90,7 @@ func (e *Engine) blockCreationLoop() {
 		select {
 		case <-ticker.C:
 			if e.config.IsValidator {
+				fmt.Printf("22222")
 				block, err := e.blockProcessor.CreateBlock(types.Round(e.state.CurrentRound))
 				if err != nil {
 					log.Printf("Failed to create block: %v", err)
