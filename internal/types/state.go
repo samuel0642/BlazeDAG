@@ -1,12 +1,24 @@
 package types
 
-// State represents the global state
+// State represents the core state of the blockchain
 type State struct {
+	// Block state
+	CurrentWave     uint64
+	CurrentRound    uint64
+	Height          uint64
+	LatestBlock     *Block
+	PendingBlocks   map[string]*Block
+	FinalizedBlocks map[string]*Block
+
+	// Consensus state
+	ActiveProposals map[string]*Proposal
+	Votes           map[string][]*Vote
+
+	// Network state
+	ConnectedPeers map[Address]*Peer
+
+	// Account state
 	Accounts map[string]*Account
-	Storage  map[string]map[string][]byte
-	Code     map[string][]byte
-	Nonce    map[string]uint64
-	Balance  map[string]uint64
 }
 
 // StateChange represents a state change
@@ -28,11 +40,25 @@ const (
 	StateChangeTypeNonce
 )
 
-// NewState creates a new state
+// NewState creates a new state instance
 func NewState() *State {
 	return &State{
-		Accounts: make(map[string]*Account),
+		CurrentWave:     1,
+		CurrentRound:    0,
+		Height:         0,
+		PendingBlocks:   make(map[string]*Block),
+		FinalizedBlocks: make(map[string]*Block),
+		ActiveProposals: make(map[string]*Proposal),
+		Votes:           make(map[string][]*Vote),
+		ConnectedPeers:  make(map[Address]*Peer),
+		Accounts:        make(map[string]*Account),
 	}
+}
+
+// ComputeRootHash computes the state root hash
+func (s *State) ComputeRootHash() Hash {
+	// TODO: Implement proper state root calculation
+	return Hash{}
 }
 
 // GetAccount retrieves an account by its address

@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/CrossDAG/BlazeDAG/internal/types"
+	"github.com/CrossDAG/BlazeDAG/internal/storage"
 )
 
 // Engine represents the core BlazeDAG engine
@@ -15,9 +16,9 @@ type Engine struct {
 	// Configuration
 	config *Config
 
-	// State
-	state     *State
-	stateLock sync.RWMutex
+	// State management
+	stateManager *StateManager
+	stateLock    sync.RWMutex
 
 	// Components
 	blockProcessor  *BlockProcessor
@@ -25,9 +26,9 @@ type Engine struct {
 	networkManager  *NetworkManager
 
 	// Channels
-	blockChan    chan *types.Block
+	blockChan     chan *types.Block
 	consensusChan chan *types.ConsensusMessage
-	stopChan     chan struct{}
+	stopChan      chan struct{}
 }
 
 // Config holds the engine configuration
@@ -39,27 +40,28 @@ type Config struct {
 }
 
 // NewEngine creates a new BlazeDAG engine
-func NewEngine(config *Config) *Engine {
-	state := NewState()
+func NewEngine(config *Config, storage *storage.Storage) *Engine {
+	state := types.NewState()
+	stateManager := NewStateManager(state, storage)
 	dag := NewDAG()
-	blockProcessor := NewBlockProcessor(config, state, dag)
-	consensusEngine := NewConsensusEngine(config, state)
+	blockProcessor := NewBlockProcessor(config, stateManager, dag)
+	consensusEngine := NewConsensusEngine(config, stateManager)
 
 	return &Engine{
-		config: config,
-		state:  state,
+		config:         config,
+		stateManager:   stateManager,
 		blockProcessor: blockProcessor,
 		consensusEngine: consensusEngine,
-		blockChan: make(chan *types.Block, 100),
-		consensusChan: make(chan *types.ConsensusMessage, 100),
-		stopChan: make(chan struct{}),
+		blockChan:      make(chan *types.Block, 100),
+		consensusChan:  make(chan *types.ConsensusMessage, 100),
+		stopChan:       make(chan struct{}),
 	}
 }
 
 // Start initializes and starts the engine
 func (e *Engine) Start() error {
 	// Initialize components
-	e.networkManager = NewNetworkManager(e.config, e.state)
+	e.networkManager = NewNetworkManager(e.config, e.stateManager)
 
 	// Start components
 	if err := e.networkManager.Start(); err != nil {
@@ -91,7 +93,8 @@ func (e *Engine) blockCreationLoop() {
 		case <-ticker.C:
 			if e.config.IsValidator {
 				fmt.Printf("22222")
-				block, err := e.blockProcessor.CreateBlock(types.Round(e.state.CurrentRound))
+				state := e.stateManager.GetState()
+				block, err := e.blockProcessor.CreateBlock(types.Round(state.CurrentRound))
 				if err != nil {
 					log.Printf("Failed to create block: %v", err)
 					continue

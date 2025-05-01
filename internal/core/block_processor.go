@@ -58,22 +58,22 @@ func (mp *Mempool) RemoveTransactions(txs []*types.Transaction) {
 	}
 }
 
-// BlockProcessor handles block creation and certification
+// BlockProcessor handles block processing
 type BlockProcessor struct {
-	config  *Config
-	state   *State
-	dag     *DAG
-	mempool *Mempool
-	mu      sync.RWMutex
+	config       *Config
+	stateManager *StateManager
+	dag          *DAG
+	mempool      *Mempool
+	mu           sync.RWMutex
 }
 
 // NewBlockProcessor creates a new block processor
-func NewBlockProcessor(config *Config, state *State, dag *DAG) *BlockProcessor {
+func NewBlockProcessor(config *Config, stateManager *StateManager, dag *DAG) *BlockProcessor {
 	return &BlockProcessor{
-		config:  config,
-		state:   state,
-		dag:     dag,
-		mempool: NewMempool(),
+		config:       config,
+		stateManager: stateManager,
+		dag:          dag,
+		mempool:      NewMempool(),
 	}
 }
 
@@ -82,6 +82,7 @@ func (bp *BlockProcessor) CreateBlock(round types.Round) (*types.Block, error) {
 	bp.mu.Lock()
 	defer bp.mu.Unlock()
 
+	state := bp.stateManager.GetState()
 	// Get transactions from mempool
 	txs := bp.mempool.GetTransactions()
 	log.Printf("Creating new block with %d transactions for round %d", len(txs), round)
@@ -108,7 +109,7 @@ func (bp *BlockProcessor) CreateBlock(round types.Round) (*types.Block, error) {
 		Version:    1,
 		Timestamp:  time.Now(),
 		Round:      round,
-		Wave:       types.Wave(bp.state.CurrentWave),
+		Wave:       types.Wave(state.CurrentWave),
 		Height:     types.BlockNumber(bp.getNextHeight()),
 		ParentHash: bp.getParentHash(),
 		References: references,
@@ -134,6 +135,11 @@ func (bp *BlockProcessor) CreateBlock(round types.Round) (*types.Block, error) {
 		return nil, err
 	}
 
+	// Save block to storage
+	if err := bp.stateManager.storage.SaveBlock(block); err != nil {
+		return nil, err
+	}
+
 	// Remove processed transactions from mempool
 	bp.mempool.RemoveTransactions(txs)
 	log.Printf("Block created successfully with %d transactions and %d references", len(txs), len(references))
@@ -143,18 +149,20 @@ func (bp *BlockProcessor) CreateBlock(round types.Round) (*types.Block, error) {
 
 // getNextHeight returns the next block height
 func (bp *BlockProcessor) getNextHeight() uint64 {
-	if bp.state.LatestBlock == nil {
+	state := bp.stateManager.GetState()
+	if state.LatestBlock == nil {
 		return 0
 	}
-	return uint64(bp.state.LatestBlock.Header.Height + 1)
+	return uint64(state.LatestBlock.Header.Height + 1)
 }
 
 // getParentHash returns the parent block hash
 func (bp *BlockProcessor) getParentHash() types.Hash {
-	if bp.state.LatestBlock == nil {
+	state := bp.stateManager.GetState()
+	if state.LatestBlock == nil {
 		return types.Hash{}
 	}
-	return bp.state.LatestBlock.ComputeHash()
+	return state.LatestBlock.ComputeHash()
 }
 
 // calculateStateRoot calculates the state root based on transactions
@@ -267,8 +275,6 @@ func (bp *BlockProcessor) VerifyCertificate(cert *types.Certificate) error {
 }
 
 // GetState returns the current state
-func (bp *BlockProcessor) GetState() *State {
-	bp.mu.RLock()
-	defer bp.mu.RUnlock()
-	return bp.state
+func (bp *BlockProcessor) GetState() *types.State {
+	return bp.stateManager.GetState()
 } 

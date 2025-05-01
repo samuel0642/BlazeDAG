@@ -3,12 +3,12 @@ package storage
 import (
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 
-	"github.com/CrossDAG/BlazeDAG/internal/core"
-	"github.com/CrossDAG/BlazeDAG/internal/state"
 	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
@@ -40,12 +40,20 @@ func (s *Storage) SaveBlock(block *types.Block) error {
 
 	// Encode block hash as hex for filesystem safety
 	blockHash := hex.EncodeToString(block.ComputeHash())
-	blockFile := filepath.Join(s.baseDir, "blocks", blockHash)
-	if err := os.MkdirAll(filepath.Dir(blockFile), 0755); err != nil {
-		return err
+	
+	// Create validator-specific directory
+	validatorDir := filepath.Join(s.baseDir, "blocks", string(block.Header.Validator))
+	if err := os.MkdirAll(validatorDir, 0755); err != nil {
+		return fmt.Errorf("failed to create validator directory: %v", err)
 	}
 
-	return os.WriteFile(blockFile, data, 0644)
+	// Save block in validator's directory
+	blockFile := filepath.Join(validatorDir, blockHash)
+	if err := os.WriteFile(blockFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to save block: %v", err)
+	}
+
+	return nil
 }
 
 // LoadBlock loads a block from storage
@@ -55,18 +63,37 @@ func (s *Storage) LoadBlock(hash types.Hash) (*types.Block, error) {
 
 	// Encode block hash as hex for filesystem safety
 	blockHash := hex.EncodeToString(hash)
-	blockFile := filepath.Join(s.baseDir, "blocks", blockHash)
-	data, err := os.ReadFile(blockFile)
+	
+	// Search in all validator directories
+	blocksDir := filepath.Join(s.baseDir, "blocks")
+	validators, err := os.ReadDir(blocksDir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read blocks directory: %v", err)
 	}
 
-	var block types.Block
-	if err := json.Unmarshal(data, &block); err != nil {
-		return nil, err
+	for _, validator := range validators {
+		if !validator.IsDir() {
+			continue
+		}
+		
+		blockFile := filepath.Join(blocksDir, validator.Name(), blockHash)
+		data, err := os.ReadFile(blockFile)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, fmt.Errorf("failed to read block file: %v", err)
+		}
+
+		var block types.Block
+		if err := json.Unmarshal(data, &block); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal block: %v", err)
+		}
+
+		return &block, nil
 	}
 
-	return &block, nil
+	return nil, fmt.Errorf("block not found")
 }
 
 // SaveMempool saves the mempool to storage
@@ -106,28 +133,11 @@ func (s *Storage) LoadMempool() ([]*types.Transaction, error) {
 }
 
 // SaveState saves the engine state to storage
-func (s *Storage) SaveState(state *core.State) error {
+func (s *Storage) SaveState(state *types.State) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Create a map to store the state data
-	stateData := map[string]interface{}{
-		"latest_block":     state.LatestBlock,
-		"pending_blocks":   state.PendingBlocks,
-		"finalized_blocks": state.FinalizedBlocks,
-		"current_wave":     state.CurrentWave,
-		"current_round":    state.CurrentRound,
-		"active_proposals": state.ActiveProposals,
-		"votes":           state.Votes,
-		"connected_peers": state.ConnectedPeers,
-	}
-
-	// Ensure current_round is always set
-	if state.CurrentRound == 0 {
-		state.CurrentRound = 1
-	}
-
-	data, err := json.Marshal(stateData)
+	data, err := json.Marshal(state)
 	if err != nil {
 		return err
 	}
@@ -137,7 +147,7 @@ func (s *Storage) SaveState(state *core.State) error {
 }
 
 // LoadState loads the engine state from storage
-func (s *Storage) LoadState() (*core.State, error) {
+func (s *Storage) LoadState() (*types.State, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -145,156 +155,78 @@ func (s *Storage) LoadState() (*core.State, error) {
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Initialize with default values
-			state := core.NewState()
-			state.CurrentWave = 1
-			state.CurrentRound = 1
-			return state, nil
+			return types.NewState(), nil
 		}
 		return nil, err
 	}
 
-	var stateData map[string]interface{}
-	if err := json.Unmarshal(data, &stateData); err != nil {
-		return nil, err
-	}
-
-	state := core.NewState()
-
-	// Restore state data
-	if latestBlock, ok := stateData["latest_block"].(map[string]interface{}); ok {
-		blockData, err := json.Marshal(latestBlock)
-		if err == nil {
-			json.Unmarshal(blockData, &state.LatestBlock)
-		}
-	}
-
-	if pendingBlocks, ok := stateData["pending_blocks"].(map[string]interface{}); ok {
-		state.PendingBlocks = make(map[string]*types.Block)
-		for k, v := range pendingBlocks {
-			if blockData, ok := v.(map[string]interface{}); ok {
-				blockBytes, err := json.Marshal(blockData)
-				if err == nil {
-					var block types.Block
-					if err := json.Unmarshal(blockBytes, &block); err == nil {
-						state.PendingBlocks[k] = &block
-					}
-				}
-			}
-		}
-	}
-
-	if finalizedBlocks, ok := stateData["finalized_blocks"].(map[string]interface{}); ok {
-		state.FinalizedBlocks = make(map[string]*types.Block)
-		for k, v := range finalizedBlocks {
-			if blockData, ok := v.(map[string]interface{}); ok {
-				blockBytes, err := json.Marshal(blockData)
-				if err == nil {
-					var block types.Block
-					if err := json.Unmarshal(blockBytes, &block); err == nil {
-						state.FinalizedBlocks[k] = &block
-					}
-				}
-			}
-		}
-	}
-
-	if currentWave, ok := stateData["current_wave"].(float64); ok {
-		state.CurrentWave = uint64(currentWave)
-	}
-
-	if currentRound, ok := stateData["current_round"].(float64); ok {
-		state.CurrentRound = uint64(currentRound)
-	} else {
-		// If current_round is not found, set it to 1
-		state.CurrentRound = 1
-	}
-
-	if activeProposals, ok := stateData["active_proposals"].(map[string]interface{}); ok {
-		state.ActiveProposals = make(map[string]*types.Proposal)
-		for k, v := range activeProposals {
-			if proposalData, ok := v.(map[string]interface{}); ok {
-				proposalBytes, err := json.Marshal(proposalData)
-				if err == nil {
-					var proposal types.Proposal
-					if err := json.Unmarshal(proposalBytes, &proposal); err == nil {
-						state.ActiveProposals[k] = &proposal
-					}
-				}
-			}
-		}
-	}
-
-	if votes, ok := stateData["votes"].(map[string]interface{}); ok {
-		state.Votes = make(map[string][]*types.Vote)
-		for k, v := range votes {
-			if voteList, ok := v.([]interface{}); ok {
-				state.Votes[k] = make([]*types.Vote, 0, len(voteList))
-				for _, voteData := range voteList {
-					if voteMap, ok := voteData.(map[string]interface{}); ok {
-						voteBytes, err := json.Marshal(voteMap)
-						if err == nil {
-							var vote types.Vote
-							if err := json.Unmarshal(voteBytes, &vote); err == nil {
-								state.Votes[k] = append(state.Votes[k], &vote)
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	if connectedPeers, ok := stateData["connected_peers"].(map[string]interface{}); ok {
-		state.ConnectedPeers = make(map[types.Address]*types.Peer)
-		for k, v := range connectedPeers {
-			if peerData, ok := v.(map[string]interface{}); ok {
-				peerBytes, err := json.Marshal(peerData)
-				if err == nil {
-					var peer types.Peer
-					if err := json.Unmarshal(peerBytes, &peer); err == nil {
-						state.ConnectedPeers[types.Address(k)] = &peer
-					}
-				}
-			}
-		}
-	}
-
-	return state, nil
-}
-
-// SaveAccountState saves the account state to storage
-func (s *Storage) SaveAccountState(state *state.State) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	data, err := json.Marshal(state)
-	if err != nil {
-		return err
-	}
-
-	stateFile := filepath.Join(s.baseDir, "account_state.json")
-	return os.WriteFile(stateFile, data, 0644)
-}
-
-// LoadAccountState loads the account state from storage
-func (s *Storage) LoadAccountState() (*state.State, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	stateFile := filepath.Join(s.baseDir, "account_state.json")
-	data, err := os.ReadFile(stateFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return state.NewState(), nil
-		}
-		return nil, err
-	}
-
-	var state state.State
+	var state types.State
 	if err := json.Unmarshal(data, &state); err != nil {
 		return nil, err
 	}
 
 	return &state, nil
+}
+
+// GetLatestBlocks returns the n latest blocks from storage
+func (s *Storage) GetLatestBlocks(n int) ([]*types.Block, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	blocksDir := filepath.Join(s.baseDir, "blocks")
+	validators, err := os.ReadDir(blocksDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get all blocks from all validators
+	allBlocks := make([]*types.Block, 0)
+	for _, validator := range validators {
+		if !validator.IsDir() {
+			continue
+		}
+
+		validatorDir := filepath.Join(blocksDir, validator.Name())
+		files, err := os.ReadDir(validatorDir)
+		if err != nil {
+			continue
+		}
+
+		// Sort files by modification time (newest first)
+		sort.Slice(files, func(i, j int) bool {
+			info1, _ := files[i].Info()
+			info2, _ := files[j].Info()
+			return info1.ModTime().After(info2.ModTime())
+		})
+
+		// Get blocks from this validator
+		for _, file := range files {
+			if file.IsDir() {
+				continue
+			}
+
+			data, err := os.ReadFile(filepath.Join(validatorDir, file.Name()))
+			if err != nil {
+				continue
+			}
+
+			var block types.Block
+			if err := json.Unmarshal(data, &block); err != nil {
+				continue
+			}
+
+			allBlocks = append(allBlocks, &block)
+		}
+	}
+
+	// Sort all blocks by timestamp (newest first)
+	sort.Slice(allBlocks, func(i, j int) bool {
+		return allBlocks[i].Header.Timestamp.After(allBlocks[j].Header.Timestamp)
+	})
+
+	// Return the n latest blocks
+	if n > len(allBlocks) {
+		n = len(allBlocks)
+	}
+	return allBlocks[:n], nil
 } 
