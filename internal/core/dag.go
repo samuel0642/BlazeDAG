@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/CrossDAG/BlazeDAG/internal/types"
@@ -34,7 +35,10 @@ func (d *DAG) AddBlock(block *types.Block) error {
 		return fmt.Errorf("block already exists")
 	}
 
+	// Add block
 	d.blocks[hash] = block
+
+	// Update height if this block is higher
 	if block.Header.Height > d.height {
 		d.height = block.Header.Height
 	}
@@ -43,6 +47,10 @@ func (d *DAG) AddBlock(block *types.Block) error {
 	if block.Body != nil {
 		d.references[hash] = block.Header.References
 	}
+
+	// Log block addition
+	log.Printf("Added block to DAG - Hash: %s, Height: %d, Validator: %s, References: %d",
+		hash, block.Header.Height, block.Header.Validator, len(block.Header.References))
 
 	return nil
 }
@@ -124,6 +132,21 @@ func (d *DAG) GetBlocksByHeight(height types.BlockNumber) []*types.Block {
 	var blocks []*types.Block
 	for _, block := range d.blocks {
 		if block.Header.Height == height {
+			blocks = append(blocks, block)
+		}
+	}
+
+	return blocks
+}
+
+// GetBlocksByValidator gets all blocks from a specific validator
+func (d *DAG) GetBlocksByValidator(validator types.Address) []*types.Block {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	var blocks []*types.Block
+	for _, block := range d.blocks {
+		if block.Header.Validator == validator {
 			blocks = append(blocks, block)
 		}
 	}

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/CrossDAG/BlazeDAG/internal/config"
+	"github.com/CrossDAG/BlazeDAG/internal/consensus"
 )
 
 func main() {
@@ -14,7 +14,7 @@ func main() {
 	flag.Parse()
 
 	// Load configuration
-	cfg, err := config.LoadConfig(*configPath)
+	cfg, err := consensus.LoadConfig(*configPath)
 	if err != nil {
 		fmt.Printf("Error loading config: %v\n", err)
 		os.Exit(1)

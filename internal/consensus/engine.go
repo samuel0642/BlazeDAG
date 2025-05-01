@@ -1,15 +1,19 @@
 package consensus
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"log"
+	"net"
+	// "strings"
 	"sync"
 	"time"
 
 	"github.com/CrossDAG/BlazeDAG/internal/core"
 	"github.com/CrossDAG/BlazeDAG/internal/state"
 	"github.com/CrossDAG/BlazeDAG/internal/types"
+	"encoding/gob"
 )
 
 var (
@@ -50,6 +54,7 @@ type Engine struct {
 	votes     map[string][]*types.Vote
 	mu        sync.RWMutex
 	logger    *log.Logger
+	waveManager *WaveManager
 }
 
 // NewEngine creates a new consensus engine with the given configuration
@@ -59,6 +64,7 @@ func NewEngine(config *Config) *Engine {
 		proposals: make(map[string]*types.Proposal),
 		votes:     make(map[string][]*types.Vote),
 		logger:    log.New(log.Writer(), "[Consensus] ", log.LstdFlags),
+		waveManager: NewWaveManager(nil),
 	}
 }
 
@@ -123,18 +129,40 @@ type ConsensusEngine struct {
 	waves         map[types.Wave]*WaveState
 	logger        *log.Logger
 	blockProcessor *core.BlockProcessor
+	networkServer  *NetworkServer
+	votes         map[string][]*types.Vote
 }
 
 // NewConsensusEngine creates a new consensus engine
 func NewConsensusEngine(config *Config, stateManager *state.StateManager, blockProcessor *core.BlockProcessor) *ConsensusEngine {
-	return &ConsensusEngine{
+	engine := &ConsensusEngine{
 		config:         config,
 		stateManager:   stateManager,
 		blockProcessor: blockProcessor,
 		proposals:      make(map[string]*types.Proposal),
 		waves:          make(map[types.Wave]*WaveState),
 		logger:         log.New(log.Writer(), "[Consensus] ", log.LstdFlags),
+		votes:          make(map[string][]*types.Vote),
 	}
+
+	// Set node ID from config
+	engine.nodeID = types.Address(config.NodeID)
+	if engine.nodeID == "" {
+		engine.logger.Printf("Warning: Node ID is empty")
+	}
+
+	// Set listen address from config
+	if config.ListenAddr == "" {
+		engine.logger.Printf("Warning: Listen address is empty")
+	}
+
+	// Initialize network server
+	engine.networkServer = NewNetworkServer(engine)
+
+	// Initialize wave manager
+	engine.waveManager = NewWaveManager(engine)
+
+	return engine
 }
 
 // Start starts the consensus engine
@@ -178,12 +206,19 @@ func (ce *ConsensusEngine) Start() error {
 	ce.selectLeader()
 	ce.logger.Printf("Selected initial leader: %s", ce.currentLeader)
 
+	// Initialize network server
+	ce.networkServer = NewNetworkServer(ce)
+
+	// Start network server
+	if err := ce.networkServer.Start(); err != nil {
+		return fmt.Errorf("failed to start network server: %v", err)
+	}
+
+	// Start wave manager
+	ce.waveManager.Start()
+
 	ce.running = true
-	ce.logger.Printf("Consensus engine started for node %s", ce.nodeID)
-
-	// Start wave timer
-	go ce.waveTimer()
-
+	ce.logger.Printf("Consensus engine started")
 	return nil
 }
 
@@ -520,6 +555,7 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 		ce.currentWave.GetWaveNumber(), ce.currentRound)
 
 	// Use BlockProcessor to create block
+	fmt.Print("111111111")
 	block, err := ce.blockProcessor.CreateBlock(ce.currentRound)
 	if err != nil {
 		ce.logger.Printf("Failed to create block: %v", err)
@@ -587,7 +623,8 @@ func (ce *ConsensusEngine) calculateStateRoot() types.Hash {
 
 // signBlock signs a block
 func (ce *ConsensusEngine) signBlock(block *types.Block) error {
-	// TODO: Implement block signing
+	// TODO: Implement proper block signing
+	// For now, just create a dummy signature
 	block.Header.Signature = types.Signature{
 		Validator:  ce.nodeID,
 		Signature:  []byte("dummy_signature"),
@@ -596,9 +633,173 @@ func (ce *ConsensusEngine) signBlock(block *types.Block) error {
 	return nil
 }
 
-// BroadcastBlock broadcasts a block to all peers
+// BroadcastBlock broadcasts a block to all validators
 func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
-	// TODO: Implement block broadcasting
+	ce.mu.RLock()
+	defer ce.mu.RUnlock()
+
+	if !ce.running {
+		return errors.New("engine is not running")
+	}
+
+	// Sign the block
+	if err := ce.signBlock(block); err != nil {
+		return fmt.Errorf("failed to sign block: %v", err)
+	}
+
+	// Compute block hash once
+	blockHash := block.ComputeHash()
+
+	// Create proposal
+	proposal := &types.Proposal{
+		ID:        blockHash,
+		BlockHash: blockHash,
+		Block:     block,
+		Proposer:  ce.nodeID,
+		Timestamp: time.Now(),
+	}
+
+	// Store the proposal
+	ce.proposals[string(blockHash)] = proposal
+
+	// Broadcast to all validators
+	for _, validator := range ce.validators {
+		if validator != ce.nodeID { // Don't send to self
+			// Get validator's address from config
+			validatorAddr := ce.getValidatorAddress(validator)
+			if validatorAddr == "" {
+				ce.logger.Printf("Warning: No address found for validator %s", validator)
+				continue
+			}
+
+			ce.logger.Printf("Broadcasting block %x to validator %s at %s", 
+				blockHash, validator, validatorAddr)
+
+			// Create connection to validator
+			conn, err := net.Dial("tcp", validatorAddr)
+			if err != nil {
+				ce.logger.Printf("Error connecting to validator %s at %s: %v", validator, validatorAddr, err)
+				continue
+			}
+			defer conn.Close()
+
+			// Set write deadline
+			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+
+			// Create a buffer to hold the encoded proposal
+			var buf bytes.Buffer
+			encoder := gob.NewEncoder(&buf)
+			if err := encoder.Encode(proposal); err != nil {
+				ce.logger.Printf("Error encoding proposal for validator %s: %v", validator, err)
+				continue
+			}
+
+			// Write the encoded proposal to the connection
+			if _, err := conn.Write(buf.Bytes()); err != nil {
+				ce.logger.Printf("Error sending proposal to validator %s: %v", validator, err)
+				continue
+			}
+
+			// Wait for acknowledgment
+			ackBuf := make([]byte, 3) // "ACK" is 3 bytes
+			conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+			if _, err := conn.Read(ackBuf); err != nil {
+				ce.logger.Printf("Error receiving acknowledgment from validator %s: %v", validator, err)
+				continue
+			}
+
+			if !bytes.Equal(ackBuf, []byte("ACK")) {
+				ce.logger.Printf("Invalid acknowledgment from validator %s", validator)
+				continue
+			}
+
+			ce.logger.Printf("Successfully broadcasted block %x to validator %s", 
+				blockHash, validator)
+		}
+	}
+
+	return nil
+}
+
+// getValidatorAddress returns the network address for a validator
+func (ce *ConsensusEngine) getValidatorAddress(validator types.Address) string {
+	// Get validator's listen address from config
+	for _, v := range ce.config.ValidatorSet {
+		if v == validator {
+			// Determine port based on validator
+			var port string
+			switch string(validator) {
+			case "validator1":
+				port = "3000"
+			case "validator2":
+				port = "3001"
+			case "validator3":
+				port = "3002"
+			default:
+				return ""
+			}
+
+			// For local testing, use localhost
+			return fmt.Sprintf("localhost:%s", port)
+		}
+	}
+	return ""
+}
+
+// HandleProposal handles incoming block proposals from other validators
+func (ce *ConsensusEngine) HandleProposal(proposal *types.Proposal) error {
+	ce.mu.Lock()
+	defer ce.mu.Unlock()
+
+	if !ce.running {
+		return errors.New("engine is not running")
+	}
+
+	// Verify proposal
+	if err := ce.verifyProposal(proposal); err != nil {
+		return fmt.Errorf("invalid proposal: %v", err)
+	}
+
+	// Store proposal
+	ce.proposals[string(proposal.BlockHash)] = proposal
+
+	// Process block
+	if err := ce.processBlock(proposal.Block); err != nil {
+		return fmt.Errorf("failed to process block: %v", err)
+	}
+
+	ce.logger.Printf("Processed proposal for block %s from validator %s", 
+		string(proposal.BlockHash), string(proposal.Proposer))
+
+	return nil
+}
+
+// verifyProposal verifies a block proposal
+func (ce *ConsensusEngine) verifyProposal(proposal *types.Proposal) error {
+	// Verify proposer is a valid validator
+	isValidValidator := false
+	for _, v := range ce.validators {
+		if v == proposal.Proposer {
+			isValidValidator = true
+			break
+		}
+	}
+	if !isValidValidator {
+		return fmt.Errorf("invalid proposer: %s", string(proposal.Proposer))
+	}
+
+	// Verify block hash matches
+	computedHash := proposal.Block.ComputeHash()
+	if !bytes.Equal(proposal.BlockHash, computedHash) {
+		// ce.logger.Printf("Block hash mismatch: expected %x, got %x", computedHash, proposal.BlockHash)
+		return fmt.Errorf("block hash mismatch")
+	}
+
+	// Verify block signature
+	if err := ce.verifyBlockSignature(proposal.Block); err != nil {
+		return fmt.Errorf("invalid block signature: %v", err)
+	}
+
 	return nil
 }
 
@@ -652,4 +853,299 @@ func (ce *ConsensusEngine) GetBlock(hash types.Hash) (*types.Block, error) {
 	ce.mu.RLock()
 	defer ce.mu.RUnlock()
 	return ce.dag.GetBlock(hash)
+}
+
+// NetworkServer handles incoming connections and messages
+type NetworkServer struct {
+	listener net.Listener
+	engine   *ConsensusEngine
+	running  bool
+	mu       sync.RWMutex
+	port     string
+}
+
+// NewNetworkServer creates a new network server
+func NewNetworkServer(engine *ConsensusEngine) *NetworkServer {
+	// Extract port from listen address
+	addr := string(engine.config.ListenAddr)
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		engine.logger.Printf("Warning: Invalid listen address: %v", err)
+		port = "3000" // Default port
+	}
+
+	return &NetworkServer{
+		engine: engine,
+		port:   port,
+	}
+}
+
+// Start starts the network server
+func (ns *NetworkServer) Start() error {
+	ns.mu.Lock()
+	defer ns.mu.Unlock()
+
+	if ns.running {
+		return nil
+	}
+
+	// Start listening for connections
+	listener, err := net.Listen("tcp", ":"+ns.port)
+	if err != nil {
+		return fmt.Errorf("failed to start network server: %v", err)
+	}
+
+	ns.listener = listener
+	ns.running = true
+
+	// Start accepting connections
+	go ns.acceptConnections()
+
+	ns.engine.logger.Printf("Network server started on port %s", ns.port)
+	return nil
+}
+
+// Stop stops the network server
+func (ns *NetworkServer) Stop() {
+	ns.mu.Lock()
+	defer ns.mu.Unlock()
+
+	if !ns.running {
+		return
+	}
+
+	ns.running = false
+	if ns.listener != nil {
+		ns.listener.Close()
+	}
+	
+	ns.engine.logger.Printf("Network server stopped on port %s", ns.port)
+}
+
+// acceptConnections accepts incoming connections
+func (ns *NetworkServer) acceptConnections() {
+	for ns.running {
+		conn, err := ns.listener.Accept()
+		if err != nil {
+			if ns.running {
+				ns.engine.logger.Printf("Error accepting connection: %v", err)
+			}
+			continue
+		}
+
+		// Handle connection in a new goroutine
+		go ns.handleConnection(conn)
+	}
+}
+
+// handleConnection handles an incoming connection
+func (ns *NetworkServer) handleConnection(conn net.Conn) {
+	defer conn.Close()
+
+	remoteAddr := conn.RemoteAddr().String()
+	ns.engine.logger.Printf("New connection from %s", remoteAddr)
+
+	// Set read deadline
+	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+
+	// Read all data from the connection
+	buf := make([]byte, 4096)
+	n, err := conn.Read(buf)
+	if err != nil {
+		ns.engine.logger.Printf("Error reading from %s: %v", remoteAddr, err)
+		return
+	}
+
+	// Create a buffer with the received data
+	reader := bytes.NewReader(buf[:n])
+
+	// Decode message
+	decoder := gob.NewDecoder(reader)
+	var proposal types.Proposal
+	if err := decoder.Decode(&proposal); err != nil {
+		ns.engine.logger.Printf("Error decoding message from %s: %v", remoteAddr, err)
+		return
+	}
+
+	// Verify the proposal came from a valid validator
+	isValidValidator := false
+	for _, v := range ns.engine.validators {
+		if v == proposal.Proposer {
+			isValidValidator = true
+			break
+		}
+	}
+	if !isValidValidator {
+		ns.engine.logger.Printf("Invalid proposer: %s", string(proposal.Proposer))
+		return
+	}
+
+	ns.engine.logger.Printf("Received proposal for block %x from %s", 
+		proposal.BlockHash, remoteAddr)
+
+	// Handle proposal
+	if err := ns.engine.HandleProposal(&proposal); err != nil {
+		// ns.engine.logger.Printf("Error handling proposal from %s: %v", remoteAddr, err)
+		return
+	}
+
+	// Send acknowledgment
+	ack := []byte("ACK")
+	if _, err := conn.Write(ack); err != nil {
+		ns.engine.logger.Printf("Error sending acknowledgment to %s: %v", remoteAddr, err)
+		return
+	}
+
+	ns.engine.logger.Printf("Successfully processed proposal from %s", remoteAddr)
+}
+
+// Stop stops the consensus engine
+func (ce *ConsensusEngine) Stop() {
+	ce.mu.Lock()
+	defer ce.mu.Unlock()
+
+	if !ce.running {
+		return
+	}
+
+	// Stop network server
+	ce.networkServer.Stop()
+
+	// Stop wave manager
+	ce.waveManager.Stop()
+
+	ce.running = false
+	ce.logger.Printf("Consensus engine stopped")
+}
+
+// processBlock processes a received block
+func (ce *ConsensusEngine) processBlock(block *types.Block) error {
+	// Verify block
+	if err := ce.verifyBlock(block); err != nil {
+		return fmt.Errorf("block verification failed: %v", err)
+	}
+
+	// Add block to DAG
+	if err := ce.dag.AddBlock(block); err != nil {
+		return fmt.Errorf("failed to add block to DAG: %v", err)
+	}
+
+	// Update state
+	if err := ce.stateManager.CommitBlock(block); err != nil {
+		return fmt.Errorf("failed to commit block: %v", err)
+	}
+
+	ce.logger.Printf("Processed block %s at height %d", 
+		string(block.ComputeHash()), block.Header.Height)
+	return nil
+}
+
+// verifyBlock verifies a block
+func (ce *ConsensusEngine) verifyBlock(block *types.Block) error {
+	// Check block structure
+	if block == nil || block.Header == nil {
+		return fmt.Errorf("invalid block structure")
+	}
+
+	// Verify block signature
+	if err := ce.verifyBlockSignature(block); err != nil {
+		return fmt.Errorf("invalid block signature: %v", err)
+	}
+
+	// Verify block references
+	if err := ce.verifyBlockReferences(block); err != nil {
+		return fmt.Errorf("invalid block references: %v", err)
+	}
+
+	return nil
+}
+
+// verifyBlockSignature verifies a block's signature
+func (ce *ConsensusEngine) verifyBlockSignature(block *types.Block) error {
+	// TODO: Implement proper signature verification
+	// For now, just check if signature is valid
+	if block.Header.Signature.Validator == "" || len(block.Header.Signature.Signature) == 0 {
+		return fmt.Errorf("block has invalid signature")
+	}
+
+	// Verify validator is in the validator set
+	isValidValidator := false
+	for _, v := range ce.validators {
+		if v == block.Header.Signature.Validator {
+			isValidValidator = true
+			break
+		}
+	}
+	if !isValidValidator {
+		return fmt.Errorf("block signed by invalid validator: %s", string(block.Header.Signature.Validator))
+	}
+
+	return nil
+}
+
+// verifyBlockReferences verifies block references
+func (ce *ConsensusEngine) verifyBlockReferences(block *types.Block) error {
+	// Check if parent exists
+	if len(block.Header.ParentHash) > 0 {
+		parent, err := ce.dag.GetBlock(block.Header.ParentHash)
+		if err != nil {
+			return fmt.Errorf("parent block not found: %v", err)
+		}
+		if parent == nil {
+			return fmt.Errorf("parent block is nil")
+		}
+	}
+
+	// Check other references
+	for _, ref := range block.Header.References {
+		refBlock, err := ce.dag.GetBlock(ref.BlockHash)
+		if err != nil {
+			return fmt.Errorf("reference block not found: %v", err)
+		}
+		if refBlock == nil {
+			return fmt.Errorf("reference block is nil")
+		}
+	}
+
+	return nil
+}
+
+// IsBlockApproved checks if a block has been approved by the consensus
+func (ce *ConsensusEngine) IsBlockApproved(blockHash types.Hash) bool {
+	ce.mu.RLock()
+	defer ce.mu.RUnlock()
+
+	// Check if we have enough votes for this block
+	votes, exists := ce.votes[string(blockHash)]
+	if !exists {
+		return false
+	}
+
+	// Count unique validators who voted for this block
+	validatorVotes := make(map[types.Address]bool)
+	for _, vote := range votes {
+		validatorVotes[vote.Validator] = true
+	}
+
+	// Check if we have enough unique validator votes
+	return len(validatorVotes) >= ce.config.QuorumSize
+}
+
+// GetBlockVotes returns the number of votes received for a block
+func (ce *ConsensusEngine) GetBlockVotes(blockHash types.Hash) int {
+	ce.mu.RLock()
+	defer ce.mu.RUnlock()
+
+	votes, exists := ce.votes[string(blockHash)]
+	if !exists {
+		return 0
+	}
+
+	// Count unique validators who voted for this block
+	validatorVotes := make(map[types.Address]bool)
+	for _, vote := range votes {
+		validatorVotes[vote.Validator] = true
+	}
+
+	return len(validatorVotes)
 } 

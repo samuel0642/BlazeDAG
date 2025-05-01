@@ -1,17 +1,15 @@
 node_id: "validator1"
 consensus:
   wave_timeout: 10s
-  round_duration: 1s
+  round_duration: 5s
   validator_set:
     - "validator1"
     - "validator2"
-    - "validator3"
   quorum_size: 2
-  listen_addr: "localhost:8081"
+  listen_addr: "localhost:3000"
   seeds:
-    - "localhost:8082"
-    - "localhost:8083"
-  total_validators: 3
+    - "localhost:3001"
+  total_validators: 2
 
 state:
   genesis_file: "genesis.json"
@@ -19,4 +17,3 @@ state:
 evm:
   chain_id: 1
   gas_limit: 8000000
-  

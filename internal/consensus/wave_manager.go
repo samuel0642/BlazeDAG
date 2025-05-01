@@ -16,9 +16,10 @@ type WaveManager struct {
 }
 
 // NewWaveManager creates a new wave manager
-func NewWaveManager(config *Config) *WaveManager {
+func NewWaveManager(engine *ConsensusEngine) *WaveManager {
 	return &WaveManager{
-		timeout: config.WaveTimeout,
+		engine:  engine,
+		timeout: engine.config.WaveTimeout,
 	}
 }
 
@@ -42,6 +43,14 @@ func (wm *WaveManager) run() {
 		case <-wm.timer.C:
 			wm.ProcessTimeout()
 			wm.timer.Reset(wm.timeout)
+		default:
+			// Handle wave phases
+			if wm.engine.IsLeader() {
+				if err := wm.handleWaveProposing(); err != nil {
+					wm.engine.logger.Printf("Error handling wave proposing: %v", err)
+				}
+			}
+			time.Sleep(100000 * time.Millisecond) // Avoid busy waiting
 		}
 	}
 }

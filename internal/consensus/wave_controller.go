@@ -43,6 +43,14 @@ func (wc *WaveController) run() {
 		case <-wc.timer.C:
 			wc.ProcessTimeout()
 			wc.timer.Reset(wc.timeout)
+		default:
+			// Handle wave phases
+			if wc.engine.IsLeader() {
+				if err := wc.handleWaveProposing(); err != nil {
+					wc.engine.logger.Printf("Error handling wave proposing: %v", err)
+				}
+			}
+			time.Sleep(100 * time.Millisecond) // Avoid busy waiting
 		}
 	}
 }
