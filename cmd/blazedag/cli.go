@@ -14,6 +14,7 @@ import (
 	"github.com/CrossDAG/BlazeDAG/internal/state"
 	"github.com/CrossDAG/BlazeDAG/internal/core"
 	"github.com/CrossDAG/BlazeDAG/internal/types"
+	"github.com/CrossDAG/BlazeDAG/internal/storage"
 )
 
 // CLI represents the command line interface
@@ -165,18 +166,19 @@ func (c *CLI) initialize() error {
 	dag := core.NewDAG()
 
 	// Create initial state
-	initialState := &core.State{
-		CurrentWave:      1,
-		LatestBlock:      nil,
-		PendingBlocks:    make(map[string]*types.Block),
-		FinalizedBlocks:  make(map[string]*types.Block),
-		ActiveProposals:  make(map[string]*types.Proposal),
-		Votes:           make(map[string][]*types.Vote),
-		ConnectedPeers:  make(map[types.Address]*types.Peer),
+	initialState := types.NewState()
+
+	// Create storage
+	storage, err := storage.NewStorage("data")
+	if err != nil {
+		return fmt.Errorf("failed to create storage: %v", err)
 	}
 
+	// Create state manager
+	stateManager := core.NewStateManager(initialState, storage)
+
 	// Initialize block processor
-	c.blockProcessor = core.NewBlockProcessor(blockConfig, initialState, dag)
+	c.blockProcessor = core.NewBlockProcessor(blockConfig, stateManager, dag)
 
 	// Initialize consensus engine
 	c.consensusEngine = consensus.NewConsensusEngine(c.config, c.stateManager, c.blockProcessor)

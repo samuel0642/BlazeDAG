@@ -3,20 +3,23 @@ package core
 import (
 	"time"
 
+	"github.com/CrossDAG/BlazeDAG/internal/storage"
 	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
 // BlockCreator handles block creation
 type BlockCreator struct {
-	config *Config
-	state  *State
+	config  *Config
+	state   *types.State
+	storage *storage.Storage
 }
 
 // NewBlockCreator creates a new block creator
-func NewBlockCreator(config *Config, state *State) *BlockCreator {
+func NewBlockCreator(config *Config, state *types.State, storage *storage.Storage) *BlockCreator {
 	return &BlockCreator{
-		config: config,
-		state:  state,
+		config:  config,
+		state:   state,
+		storage: storage,
 	}
 }
 
@@ -53,6 +56,11 @@ func (bc *BlockCreator) CreateBlock() (*types.Block, error) {
 		return nil, err
 	}
 
+	// Save block to storage
+	if err := bc.storage.SaveBlock(block); err != nil {
+		return nil, err
+	}
+
 	return block, nil
 }
 
@@ -74,28 +82,51 @@ func (bc *BlockCreator) getParentHash() types.Hash {
 
 // selectReferences selects references for the new block
 func (bc *BlockCreator) selectReferences() []*types.Reference {
-	// TODO: Implement reference selection logic
-	// For now, return empty references
-	return make([]*types.Reference, 0)
+	references := make([]*types.Reference, 0)
+	
+	// Get the latest blocks from storage
+	latestBlocks, err := bc.storage.GetLatestBlocks(5) // Get last 5 blocks
+	if err != nil {
+		return references
+	}
+
+	// Create references to the latest blocks
+	for _, block := range latestBlocks {
+		ref := &types.Reference{
+			BlockHash: block.ComputeHash(),
+			Round:     block.Header.Round,
+			Wave:      block.Header.Wave,
+		}
+		references = append(references, ref)
+	}
+
+	return references
 }
 
 // calculateStateRoot calculates the state root
 func (bc *BlockCreator) calculateStateRoot() types.Hash {
-	// TODO: Implement state root calculation
-	// For now, return a dummy hash
-	return types.Hash{}
+	return bc.state.ComputeRootHash()
 }
 
 // collectTransactions collects transactions for the new block
 func (bc *BlockCreator) collectTransactions() []*types.Transaction {
-	// TODO: Implement transaction collection logic
-	// For now, return empty transactions
-	return make([]*types.Transaction, 0)
+	// Get transactions from mempool
+	txs, err := bc.storage.LoadMempool()
+	if err != nil {
+		return make([]*types.Transaction, 0)
+	}
+
+	// Clear mempool after collecting transactions
+	if err := bc.storage.SaveMempool(make([]*types.Transaction, 0)); err != nil {
+		return txs
+	}
+
+	return txs
 }
 
 // signBlock signs the block
 func (bc *BlockCreator) signBlock(block *types.Block) error {
-	// TODO: Implement block signing
+	// TODO: Implement proper block signing with validator key
 	// For now, just set a dummy signature
 	block.Header.Signature = types.Signature{
 		Validator:  bc.config.NodeID,

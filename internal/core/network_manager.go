@@ -11,27 +11,24 @@ import (
 
 // NetworkManager handles network communication
 type NetworkManager struct {
-	config *Config
-	state  *State
+	config       *Config
+	stateManager *StateManager
 
 	// Network state
-	listener net.Listener
-	peers    map[types.Address]*Peer
-	peerLock sync.RWMutex
-
-	// Message channels
+	peers       map[types.Address]*Peer
+	peerLock    sync.RWMutex
 	messageChan chan *types.NetworkMessage
 	stopChan    chan struct{}
 }
 
 // NewNetworkManager creates a new network manager
-func NewNetworkManager(config *Config, state *State) *NetworkManager {
+func NewNetworkManager(config *Config, stateManager *StateManager) *NetworkManager {
 	return &NetworkManager{
-		config:      config,
-		state:       state,
-		peers:       make(map[types.Address]*Peer),
-		messageChan: make(chan *types.NetworkMessage, 100),
-		stopChan:    make(chan struct{}),
+		config:       config,
+		stateManager: stateManager,
+		peers:        make(map[types.Address]*Peer),
+		messageChan:  make(chan *types.NetworkMessage, 100),
+		stopChan:     make(chan struct{}),
 	}
 }
 
@@ -42,13 +39,12 @@ func (nm *NetworkManager) Start() error {
 	if err != nil {
 		return err
 	}
-	nm.listener = listener
 
 	// Start accepting connections
-	go nm.acceptConnections()
+	go nm.acceptConnections(listener)
 
-	// Start message processing
-	go nm.processMessages()
+	// Start message handler
+	go nm.handleMessages()
 
 	return nil
 }
@@ -56,25 +52,19 @@ func (nm *NetworkManager) Start() error {
 // Stop stops the network manager
 func (nm *NetworkManager) Stop() {
 	close(nm.stopChan)
-	if nm.listener != nil {
-		nm.listener.Close()
-	}
 }
 
 // acceptConnections accepts incoming connections
-func (nm *NetworkManager) acceptConnections() {
+func (nm *NetworkManager) acceptConnections(listener net.Listener) {
 	for {
 		select {
 		case <-nm.stopChan:
 			return
 		default:
-			conn, err := nm.listener.Accept()
+			conn, err := listener.Accept()
 			if err != nil {
-				log.Printf("Failed to accept connection: %v", err)
 				continue
 			}
-
-			// Handle new connection
 			go nm.handleConnection(conn)
 		}
 	}
@@ -114,58 +104,21 @@ func (nm *NetworkManager) handleConnection(conn net.Conn) {
 	}
 }
 
-// processMessages processes incoming messages
-func (nm *NetworkManager) processMessages() {
+// handleMessages handles incoming messages
+func (nm *NetworkManager) handleMessages() {
 	for {
 		select {
+		case msg := <-nm.messageChan:
+			nm.processMessage(msg)
 		case <-nm.stopChan:
 			return
-		case msg := <-nm.messageChan:
-			nm.handleMessage(msg)
 		}
 	}
 }
 
-// handleMessage handles an incoming message
-func (nm *NetworkManager) handleMessage(msg *types.NetworkMessage) {
-	// Update peer last seen
-	nm.updatePeerLastSeen(msg.Sender)
-
-	// Handle message based on type
-	switch msg.Type {
-	case types.MessageTypeBlock:
-		nm.handleBlockMessage(msg)
-	case types.MessageTypeVote:
-		nm.handleVoteMessage(msg)
-	case types.MessageTypeProposal:
-		nm.handleProposalMessage(msg)
-	case types.MessageTypeComplaint:
-		nm.handleComplaintMessage(msg)
-	}
-}
-
-// handleBlockMessage handles a block message
-func (nm *NetworkManager) handleBlockMessage(msg *types.NetworkMessage) {
-	// TODO: Implement block message handling
-	log.Printf("Received block message from %s", msg.Sender)
-}
-
-// handleVoteMessage handles a vote message
-func (nm *NetworkManager) handleVoteMessage(msg *types.NetworkMessage) {
-	// TODO: Implement vote message handling
-	log.Printf("Received vote message from %s", msg.Sender)
-}
-
-// handleProposalMessage handles a proposal message
-func (nm *NetworkManager) handleProposalMessage(msg *types.NetworkMessage) {
-	// TODO: Implement proposal message handling
-	log.Printf("Received proposal message from %s", msg.Sender)
-}
-
-// handleComplaintMessage handles a complaint message
-func (nm *NetworkManager) handleComplaintMessage(msg *types.NetworkMessage) {
-	// TODO: Implement complaint message handling
-	log.Printf("Received complaint message from %s", msg.Sender)
+// processMessage processes a network message
+func (nm *NetworkManager) processMessage(msg *types.NetworkMessage) {
+	// TODO: Implement message processing
 }
 
 // addPeer adds a new peer
