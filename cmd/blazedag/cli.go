@@ -105,7 +105,7 @@ func (c *CLI) runChain() {
 
 				// Show leader selection when wave changes
 				log.Printf("\n=== Wave %d Leader Selection ===", currentWave)
-				log.Printf("Selected Leader: %s", c.config.NodeID)
+	
 
 				// Process the block through consensus
 				if err := c.consensusEngine.HandleBlock(block); err != nil {
