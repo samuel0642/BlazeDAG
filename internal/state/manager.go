@@ -1,6 +1,11 @@
 package state
 
 import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/CrossDAG/BlazeDAG/internal/types"
@@ -12,6 +17,7 @@ type StateManager struct {
 	validators  []string
 	nodeID      string
 	mu          sync.RWMutex
+	baseDir     string
 }
 
 // NewStateManager creates a new state manager
@@ -230,4 +236,55 @@ func (sm *StateManager) VerifyState() error {
 	}
 
 	return nil
+}
+
+// GetAllBlocks returns all blocks in the chain
+func (sm *StateManager) GetAllBlocks() ([]*types.Block, error) {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	// Get all validator directories
+	validatorDirs, err := os.ReadDir(filepath.Join(sm.baseDir, "blocks"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read validator directories: %v", err)
+	}
+
+	var blocks []*types.Block
+	for _, validatorDir := range validatorDirs {
+		if !validatorDir.IsDir() {
+			continue
+		}
+
+		// Read all block files in validator directory
+		blockFiles, err := os.ReadDir(filepath.Join(sm.baseDir, "blocks", validatorDir.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("failed to read blocks for validator %s: %v", validatorDir.Name(), err)
+		}
+
+		for _, blockFile := range blockFiles {
+			if blockFile.IsDir() {
+				continue
+			}
+
+			// Read and decode block
+			data, err := os.ReadFile(filepath.Join(sm.baseDir, "blocks", validatorDir.Name(), blockFile.Name()))
+			if err != nil {
+				return nil, fmt.Errorf("failed to read block file %s: %v", blockFile.Name(), err)
+			}
+
+			var block types.Block
+			if err := json.Unmarshal(data, &block); err != nil {
+				return nil, fmt.Errorf("failed to decode block %s: %v", blockFile.Name(), err)
+			}
+
+			blocks = append(blocks, &block)
+		}
+	}
+
+	// Sort blocks by height
+	sort.Slice(blocks, func(i, j int) bool {
+		return blocks[i].Header.Height < blocks[j].Header.Height
+	})
+
+	return blocks, nil
 } 

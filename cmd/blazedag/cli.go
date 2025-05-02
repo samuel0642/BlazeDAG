@@ -214,6 +214,8 @@ func (c *CLI) run() error {
 			c.handleBlock()
 		case "send":
 			c.handleSend()
+		case "showblocks":
+			c.showBlocks()
 		case "exit":
 			c.Stop()
 			return nil
@@ -233,6 +235,7 @@ func (c *CLI) printHelp() {
 	fmt.Println("  blocks  - List recent blocks")
 	fmt.Println("  block   - Show block details")
 	fmt.Println("  send    - Send a transaction (send <from> <to> <amount>)")
+	fmt.Println("  showblocks - Show all blocks in the chain")
 	fmt.Println("  exit    - Exit the CLI")
 }
 
@@ -357,5 +360,31 @@ func (c *CLI) handleSend() error {
 
 	c.blockProcessor.AddTransaction(tx)
 	fmt.Println("Transaction added to mempool")
+	return nil
+}
+
+// showBlocks shows all blocks in the chain
+func (c *CLI) showBlocks() error {
+	blocks, err := c.stateManager.GetAllBlocks()
+	if err != nil {
+		return fmt.Errorf("failed to get blocks: %v", err)
+	}
+
+	if len(blocks) == 0 {
+		fmt.Println("No blocks found in the chain")
+		return nil
+	}
+
+	fmt.Printf("Found %d blocks in the chain:\n\n", len(blocks))
+	for _, block := range blocks {
+		fmt.Printf("Block %s:\n", block.ComputeHash())
+		fmt.Printf("  Height: %d\n", block.Header.Height)
+		fmt.Printf("  Validator: %s\n", block.Header.Validator)
+		fmt.Printf("  Timestamp: %s\n", block.Header.Timestamp)
+		fmt.Printf("  Parent Hash: %s\n", block.Header.ParentHash)
+		fmt.Printf("  Transactions: %d\n", len(block.Body.Transactions))
+		fmt.Println()
+	}
+
 	return nil
 } 

@@ -143,6 +143,7 @@ func NewConsensusEngine(config *Config, stateManager *state.StateManager, blockP
 		waves:          make(map[types.Wave]*WaveState),
 		logger:         log.New(log.Writer(), "[Consensus] ", log.LstdFlags),
 		votes:          make(map[string][]*types.Vote),
+		dag:            core.NewDAG(), // Initialize DAG
 	}
 
 	// Set node ID from config
@@ -188,6 +189,19 @@ func (ce *ConsensusEngine) Start() error {
 		// Only set height if we have a latest block
 		if state.LatestBlock != nil {
 			ce.currentHeight = state.LatestBlock.Header.Height
+			
+			// Load all blocks into DAG
+			blocks, err := ce.stateManager.GetAllBlocks()
+			if err != nil {
+				ce.logger.Printf("Warning: Failed to load blocks from state: %v", err)
+			} else {
+				for _, block := range blocks {
+					if err := ce.dag.AddBlock(block); err != nil {
+						ce.logger.Printf("Warning: Failed to add block %s to DAG: %v", block.ComputeHash(), err)
+					}
+				}
+				ce.logger.Printf("Loaded %d blocks into DAG", len(blocks))
+			}
 		} else {
 			ce.currentHeight = 0
 		}
@@ -559,6 +573,12 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 	block, err := ce.blockProcessor.CreateBlock(ce.currentRound)
 	if err != nil {
 		ce.logger.Printf("Failed to create block: %v", err)
+		return nil, err
+	}
+
+	// Add block to DAG
+	if err := ce.dag.AddBlock(block); err != nil {
+		ce.logger.Printf("Failed to add block to DAG: %v", err)
 		return nil, err
 	}
 
