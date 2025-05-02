@@ -302,9 +302,14 @@ func (c *CLI) handleBlocks() error {
 		isApproved := c.approvedBlocks[string(blockHash)]
 		votes := c.consensusEngine.GetBlockVotes(blockHash)
 		
-		fmt.Printf("Height: %d, Hash: %s, Validator: %s, Approved: %v, Votes: %d/%d\n",
+		// Format the block hash as a hex string
+		hashStr := fmt.Sprintf("%x", blockHash)
+		
+		fmt.Printf("Height: %d, Wave: %d, Round: %d, Hash: %s, Validator: %s, Approved: %v, Votes: %d/%d\n",
 			block.Header.Height,
-			blockHash,
+			block.Header.Wave,
+			block.Header.Round,
+			hashStr,
 			block.Header.Validator,
 			isApproved,
 			votes,

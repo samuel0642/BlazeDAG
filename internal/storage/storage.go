@@ -192,13 +192,6 @@ func (s *Storage) GetLatestBlocks(n int) ([]*types.Block, error) {
 			continue
 		}
 
-		// Sort files by modification time (newest first)
-		sort.Slice(files, func(i, j int) bool {
-			info1, _ := files[i].Info()
-			info2, _ := files[j].Info()
-			return info1.ModTime().After(info2.ModTime())
-		})
-
 		// Get blocks from this validator
 		for _, file := range files {
 			if file.IsDir() {
@@ -219,9 +212,19 @@ func (s *Storage) GetLatestBlocks(n int) ([]*types.Block, error) {
 		}
 	}
 
-	// Sort all blocks by timestamp (newest first)
+	// Sort all blocks by height, wave, and round in descending order
 	sort.Slice(allBlocks, func(i, j int) bool {
-		return allBlocks[i].Header.Timestamp.After(allBlocks[j].Header.Timestamp)
+		if allBlocks[i].Header.Height != allBlocks[j].Header.Height {
+			return allBlocks[i].Header.Height > allBlocks[j].Header.Height
+		}
+		if allBlocks[i].Header.Wave != allBlocks[j].Header.Wave {
+			return allBlocks[i].Header.Wave > allBlocks[j].Header.Wave
+		}
+		if allBlocks[i].Header.Round != allBlocks[j].Header.Round {
+			return allBlocks[i].Header.Round > allBlocks[j].Header.Round
+		}
+		// If all else is equal, sort by validator to ensure consistent ordering
+		return allBlocks[i].Header.Validator > allBlocks[j].Header.Validator
 	})
 
 	// Return the n latest blocks
