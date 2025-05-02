@@ -884,8 +884,20 @@ type NetworkServer struct {
 	port     string
 }
 
+// initGobTypes initializes the types for gob encoding/decoding
+func initGobTypes() {
+	gob.Register(&types.Proposal{})
+	gob.Register(&types.Block{})
+	gob.Register(&types.Transaction{})
+	gob.Register(&types.Vote{})
+	gob.Register(&types.Certificate{})
+}
+
 // NewNetworkServer creates a new network server
 func NewNetworkServer(engine *ConsensusEngine) *NetworkServer {
+	// Initialize gob types
+	initGobTypes()
+	
 	// Extract port from listen address
 	addr := string(engine.config.ListenAddr)
 	_, port, err := net.SplitHostPort(addr)
