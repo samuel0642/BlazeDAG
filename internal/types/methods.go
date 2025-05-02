@@ -9,7 +9,13 @@ import (
 // ComputeHash returns the hash of the block
 func (b *Block) ComputeHash() Hash {
 	if b.hash == nil {
-		data, _ := json.Marshal(b)
+		// Create a copy of the block without the hash field
+		blockCopy := &Block{
+			Header:      b.Header,
+			Body:        b.Body,
+			Certificate: b.Certificate,
+		}
+		data, _ := json.Marshal(blockCopy)
 		hash := sha256.Sum256(data)
 		b.hash = hash[:]
 	}

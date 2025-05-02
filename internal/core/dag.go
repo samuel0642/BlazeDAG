@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"log"
+	"sort"
 	"sync"
 
 	"github.com/CrossDAG/BlazeDAG/internal/types"
@@ -11,7 +12,7 @@ import (
 // DAG represents a directed acyclic graph of blocks
 type DAG struct {
 	blocks     map[string]*types.Block
-	references map[string][]*types.Reference
+	references map[string][]types.Hash
 	mu         sync.RWMutex
 	height     types.BlockNumber
 }
@@ -20,7 +21,7 @@ type DAG struct {
 func NewDAG() *DAG {
 	return &DAG{
 		blocks:     make(map[string]*types.Block),
-		references: make(map[string][]*types.Reference),
+		references: make(map[string][]types.Hash),
 		height:     0,
 	}
 }
@@ -30,27 +31,32 @@ func (d *DAG) AddBlock(block *types.Block) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	hash := string(block.ComputeHash())
-	if _, exists := d.blocks[hash]; exists {
+	// Check if block already exists
+	blockHash := block.ComputeHash()
+	if _, exists := d.blocks[string(blockHash)]; exists {
 		return fmt.Errorf("block already exists")
 	}
 
-	// Add block
-	d.blocks[hash] = block
+	// Add block to DAG
+	d.blocks[string(blockHash)] = block
 
-	// Update height if this block is higher
+	// Update height if needed
 	if block.Header.Height > d.height {
 		d.height = block.Header.Height
 	}
 
 	// Add references
-	if block.Body != nil {
-		d.references[hash] = block.Header.References
+	for _, ref := range block.Header.References {
+		refHash := string(ref.BlockHash)
+		if _, exists := d.references[refHash]; !exists {
+			d.references[refHash] = make([]types.Hash, 0)
+		}
+		d.references[refHash] = append(d.references[refHash], blockHash)
 	}
 
 	// Log block addition
 	log.Printf("Added block to DAG - Hash: %s, Height: %d, Validator: %s, References: %d",
-		hash, block.Header.Height, block.Header.Validator, len(block.Header.References))
+		string(blockHash), block.Header.Height, block.Header.Validator, len(block.Header.References))
 
 	return nil
 }
@@ -180,10 +186,18 @@ func (d *DAG) GetReferences(hash types.Hash) []*types.Reference {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	return d.references[string(hash)]
+	refs := make([]*types.Reference, 0)
+	for _, refHash := range d.references[string(hash)] {
+		refs = append(refs, &types.Reference{
+			BlockHash: refHash,
+			Round:     d.blocks[string(refHash)].Header.Round,
+			Wave:      d.blocks[string(refHash)].Header.Wave,
+		})
+	}
+	return refs
 }
 
-// GetRecentBlocks returns the most recent blocks
+// GetRecentBlocks gets the most recent blocks in the DAG
 func (d *DAG) GetRecentBlocks(count int) []*types.Block {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -194,14 +208,20 @@ func (d *DAG) GetRecentBlocks(count int) []*types.Block {
 		blocks = append(blocks, block)
 	}
 
-	// Sort by height in descending order
-	for i := 0; i < len(blocks); i++ {
-		for j := i + 1; j < len(blocks); j++ {
-			if blocks[i].Header.Height < blocks[j].Header.Height {
-				blocks[i], blocks[j] = blocks[j], blocks[i]
-			}
+	// Sort by height, wave, and round in descending order
+	sort.Slice(blocks, func(i, j int) bool {
+		if blocks[i].Header.Height != blocks[j].Header.Height {
+			return blocks[i].Header.Height > blocks[j].Header.Height
 		}
-	}
+		if blocks[i].Header.Wave != blocks[j].Header.Wave {
+			return blocks[i].Header.Wave > blocks[j].Header.Wave
+		}
+		if blocks[i].Header.Round != blocks[j].Header.Round {
+			return blocks[i].Header.Round > blocks[j].Header.Round
+		}
+		// If all else is equal, sort by validator to ensure consistent ordering
+		return blocks[i].Header.Validator > blocks[j].Header.Validator
+	})
 
 	// Return the most recent blocks
 	if count > len(blocks) {

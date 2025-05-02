@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"log"
 	"sync"
 	"time"
 
@@ -16,6 +17,7 @@ type Consensus struct {
 	config  *Config
 	state   *types.State
 	storage *storage.Storage
+	dag     *core.DAG
 
 	blockCreator *core.BlockCreator
 	validatorSet *ValidatorSet
@@ -57,35 +59,19 @@ func (vs *ValidatorSet) QuorumSize() int {
 }
 
 // NewConsensus creates a new consensus engine
-func NewConsensus(config *Config, storage *storage.Storage) (*Consensus, error) {
-	// Load state from storage
-	state, err := storage.LoadState()
-	if err != nil {
-		// Initialize new state if none exists
-		state = types.NewState()
-	}
-
-	// Create validator set
-	validatorSet := NewValidatorSet(config.ValidatorSet)
-
-	// Create block creator
-	blockCreator := core.NewBlockCreator(&core.Config{
-		NodeID: types.Address(config.NodeID),
-	}, state, storage)
-
+func NewConsensus(config *Config, state *types.State, storage *storage.Storage) *Consensus {
 	return &Consensus{
 		config:       config,
 		state:        state,
 		storage:      storage,
-		blockCreator: blockCreator,
-		validatorSet: validatorSet,
+		dag:          core.NewDAG(),
+		validatorSet: NewValidatorSet(config.ValidatorSet),
 		proposalChan: make(chan *types.Block, 100),
 		voteChan:     make(chan *types.Vote, 100),
 		commitChan:   make(chan *types.Block, 100),
-		currentWave:  types.Wave(state.CurrentWave),
-		currentRound: types.Round(state.CurrentRound),
-		height:       types.BlockNumber(state.Height),
-	}, nil
+		currentWave:  1,
+		currentRound: 0,
+	}
 }
 
 // Start starts the consensus engine
@@ -126,12 +112,24 @@ func (c *Consensus) handleProposals() {
 	for block := range c.proposalChan {
 		// Validate the block
 		if !c.validateBlock(block) {
+			log.Printf("[Consensus] Invalid block received: %x", block.ComputeHash())
 			continue
 		}
 
 		// Save the block to storage
 		if err := c.storage.SaveBlock(block); err != nil {
+			log.Printf("[Consensus] Failed to save block: %v", err)
 			continue
+		}
+
+		// Add block to DAG
+		if err := c.dag.AddBlock(block); err != nil {
+			if err.Error() != "block already exists" {
+				log.Printf("[Consensus] Failed to add block to DAG: %v", err)
+				continue
+			}
+			// Block already exists, which is fine
+			log.Printf("[Consensus] Block already exists in DAG: %x", block.ComputeHash())
 		}
 
 		// Create and broadcast a vote for the block

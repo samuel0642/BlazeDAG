@@ -55,6 +55,7 @@ type Engine struct {
 	mu        sync.RWMutex
 	logger    *log.Logger
 	waveManager *WaveManager
+	dag       *core.DAG
 }
 
 // NewEngine creates a new consensus engine with the given configuration
@@ -65,6 +66,7 @@ func NewEngine(config *Config) *Engine {
 		votes:     make(map[string][]*types.Vote),
 		logger:    log.New(log.Writer(), "[Consensus] ", log.LstdFlags),
 		waveManager: NewWaveManager(nil),
+		dag:       core.NewDAG(),
 	}
 }
 
@@ -75,7 +77,22 @@ func (e *Engine) HandleProposal(proposal *types.Proposal) error {
 
 	e.logger.Printf("Received proposal for block %s in wave %d, round %d", 
 		proposal.BlockHash, proposal.Wave, proposal.Round)
+
+	// Add proposal to proposals map
 	e.proposals[string(proposal.BlockHash)] = proposal
+
+	// Add block to DAG if it exists
+	if proposal.Block != nil {
+		if err := e.dag.AddBlock(proposal.Block); err != nil {
+			if err.Error() != "block already exists" {
+				e.logger.Printf("Failed to add block to DAG: %v", err)
+				return err
+			}
+			// Block already exists, which is fine
+			e.logger.Printf("Block already exists in DAG: %s", proposal.BlockHash)
+		}
+	}
+
 	return nil
 }
 
@@ -670,17 +687,28 @@ func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
 	// Compute block hash once
 	blockHash := block.ComputeHash()
 
-	// Create proposal
+	// Create proposal with the full block
 	proposal := &types.Proposal{
 		ID:        blockHash,
 		BlockHash: blockHash,
-		Block:     block,
+		Block:     block, // Include the full block
 		Proposer:  ce.nodeID,
 		Timestamp: time.Now(),
+		Wave:      block.Header.Wave,
+		Round:     block.Header.Round,
 	}
 
 	// Store the proposal
 	ce.proposals[string(blockHash)] = proposal
+
+	// Add block to DAG
+	if err := ce.dag.AddBlock(block); err != nil {
+		if err.Error() != "block already exists" {
+			return fmt.Errorf("failed to add block to DAG: %v", err)
+		}
+		// Block already exists, which is fine
+		ce.logger.Printf("Block already exists in DAG: %x", blockHash)
+	}
 
 	// Broadcast to all validators
 	for _, validator := range ce.validators {
@@ -732,9 +760,6 @@ func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
 				ce.logger.Printf("Invalid acknowledgment from validator %s", validator)
 				continue
 			}
-
-			ce.logger.Printf("Successfully broadcasted block %x to validator %s", 
-				blockHash, validator)
 		}
 	}
 
@@ -1015,9 +1040,21 @@ func (ns *NetworkServer) handleConnection(conn net.Conn) {
 	ns.engine.logger.Printf("Received proposal for block %x from %s", 
 		proposal.BlockHash, remoteAddr)
 
+	// Add block to DAG if it exists
+	if proposal.Block != nil {
+		if err := ns.engine.dag.AddBlock(proposal.Block); err != nil {
+			if err.Error() != "block already exists" {
+				ns.engine.logger.Printf("Failed to add block to DAG: %v", err)
+				return
+			}
+			// Block already exists, which is fine
+			ns.engine.logger.Printf("Block already exists in DAG: %x", proposal.BlockHash)
+		}
+	}
+
 	// Handle proposal
 	if err := ns.engine.HandleProposal(&proposal); err != nil {
-		// ns.engine.logger.Printf("Error handling proposal from %s: %v", remoteAddr, err)
+		ns.engine.logger.Printf("Error handling proposal from %s: %v", remoteAddr, err)
 		return
 	}
 
@@ -1027,8 +1064,6 @@ func (ns *NetworkServer) handleConnection(conn net.Conn) {
 		ns.engine.logger.Printf("Error sending acknowledgment to %s: %v", remoteAddr, err)
 		return
 	}
-
-	ns.engine.logger.Printf("Successfully processed proposal from %s", remoteAddr)
 }
 
 // Stop stops the consensus engine
