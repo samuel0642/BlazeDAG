@@ -833,11 +833,11 @@ func (ce *ConsensusEngine) verifyProposal(proposal *types.Proposal) error {
 	}
 
 	// Verify block hash matches
-	// computedHash := proposal.Block.ComputeHash()
-	// if !bytes.Equal(proposal.BlockHash, computedHash) {
-	// 	// ce.logger.Printf("Block hash mismatch: expected %x, got %x", computedHash, proposal.BlockHash)
-	// 	return fmt.Errorf("block hash mismatch")
-	// }
+	computedHash := proposal.Block.ComputeHash()
+	if !bytes.Equal(proposal.BlockHash, computedHash) {
+		ce.logger.Printf("Block hash mismatch: expected %x, got %x", computedHash, proposal.BlockHash)
+		return fmt.Errorf("block hash mismatch")
+	}
 
 	// Add block to DAG
 	fmt.Println("(((((((((((((((((((((((())))))))))))))))))))))))", proposal.BlockHash)
