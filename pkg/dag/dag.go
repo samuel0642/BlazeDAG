@@ -48,7 +48,7 @@ func (d *DAG) AddBlock(block *types.Block) error {
 	defer d.mu.Unlock()
 
 	blockHash := string(block.Hash())
-
+	
 	// Check if block already exists
 	if _, exists := d.blocks[blockHash]; exists {
 		return ErrBlockExists

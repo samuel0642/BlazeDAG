@@ -1,8 +1,10 @@
 package types
 
 import (
+	"bytes"
 	"crypto/sha256"
 	// "encoding/hex"
+	"encoding/gob"
 	"encoding/json"
 )
 
@@ -15,8 +17,9 @@ func (b *Block) ComputeHash() Hash {
 			Body:        b.Body,
 			Certificate: b.Certificate,
 		}
-		data, _ := json.Marshal(blockCopy)
-		hash := sha256.Sum256(data)
+		var buf bytes.Buffer
+		gob.NewEncoder(&buf).Encode(blockCopy)
+		hash := sha256.Sum256(buf.Bytes())
 		b.hash = hash[:]
 	}
 	return b.hash

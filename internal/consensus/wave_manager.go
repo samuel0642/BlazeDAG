@@ -3,7 +3,7 @@ package consensus
 import (
 	"sync"
 	"time"
-
+	"fmt"
 	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
@@ -45,12 +45,14 @@ func (wm *WaveManager) run() {
 			wm.timer.Reset(wm.timeout)
 		default:
 			// Handle wave phases
-			if wm.engine.IsLeader() {
+			if true {
+				fmt.Println("------------------------------------")
 				if err := wm.handleWaveProposing(); err != nil {
 					wm.engine.logger.Printf("Error handling wave proposing: %v", err)
 				}
+				fmt.Println("------------------------------------")
 			}
-			time.Sleep(100000 * time.Millisecond) // Avoid busy waiting
+			time.Sleep(10000 * time.Millisecond) // Avoid busy waiting
 		}
 	}
 }
@@ -85,16 +87,19 @@ func (wm *WaveManager) FinalizeWave() {
 // handleWaveProposing handles the proposing phase of a wave
 func (wm *WaveManager) handleWaveProposing() error {
 	// Check if we are the leader
-	if !wm.engine.IsLeader() {
-		return nil
-	}
+	// if !wm.engine.IsLeader() {
+	// 	return nil
+	// }
 
 	// Create block
-	block, err := wm.engine.CreateBlock()
-	if err != nil {
-		return err
-	}
+	// fmt.Println("++++++++++++++++++++++++++++")
+	// block, err := wm.engine.CreateBlock()
+	// fmt.Println(block)
+	// fmt.Println("++++++++++++++++++++++++++++")
+	// if err != nil {
+	// 	return err
+	// }
 
 	// Broadcast block
-	return wm.engine.BroadcastBlock(block)
+	return nil
 } 

@@ -94,7 +94,7 @@ func (e *Engine) blockCreationLoop() {
 			if e.config.IsValidator {
 				fmt.Printf("22222")
 				state := e.stateManager.GetState()
-				block, err := e.blockProcessor.CreateBlock(types.Round(state.CurrentRound))
+				block, err := e.blockProcessor.CreateBlock(types.Round(state.CurrentRound), types.Wave(state.CurrentWave))
 				if err != nil {
 					log.Printf("Failed to create block: %v", err)
 					continue

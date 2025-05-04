@@ -68,9 +68,9 @@ func (wc *WaveController) GetCurrentWave() types.Wave {
 // handleWaveProposing handles the proposing phase of a wave
 func (wc *WaveController) handleWaveProposing() error {
 	// Check if we are the leader
-	if !wc.engine.IsLeader() {
-		return nil
-	}
+	// if !wc.engine.IsLeader() {
+	// 	return nil
+	// }
 
 	// Create block
 	block, err := wc.engine.CreateBlock()

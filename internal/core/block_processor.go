@@ -78,11 +78,10 @@ func NewBlockProcessor(config *Config, stateManager *StateManager, dag *DAG) *Bl
 }
 
 // CreateBlock creates a new block
-func (bp *BlockProcessor) CreateBlock(round types.Round) (*types.Block, error) {
+func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave) (*types.Block, error) {
 	bp.mu.Lock()
 	defer bp.mu.Unlock()
 
-	state := bp.stateManager.GetState()
 	// Get transactions from mempool
 	txs := bp.mempool.GetTransactions()
 	log.Printf("Creating new block with %d transactions for round %d", len(txs), round)
@@ -109,7 +108,7 @@ func (bp *BlockProcessor) CreateBlock(round types.Round) (*types.Block, error) {
 		Version:    1,
 		Timestamp:  time.Now(),
 		Round:      round,
-		Wave:       types.Wave(state.CurrentWave),
+		Wave:       currentWave,
 		Height:     types.BlockNumber(bp.getNextHeight()),
 		ParentHash: bp.getParentHash(),
 		References: references,
@@ -143,7 +142,15 @@ func (bp *BlockProcessor) CreateBlock(round types.Round) (*types.Block, error) {
 	// Remove processed transactions from mempool
 	bp.mempool.RemoveTransactions(txs)
 	log.Printf("Block created successfully with %d transactions and %d references", len(txs), len(references))
-
+	log.Printf("Block details:")
+	log.Printf("  Hash: %x", block.ComputeHash())
+	log.Printf("  Height: %d", block.Header.Height)
+	log.Printf("  Round: %d", block.Header.Round) 
+	log.Printf("  Wave: %d", block.Header.Wave)
+	log.Printf("  Validator: %s", block.Header.Validator)
+	log.Printf("  Parent Hash: %x", block.Header.ParentHash)
+	log.Printf("  References: %d", len(block.Header.References))
+	log.Printf("  Transactions: %d", len(block.Body.Transactions))
 	return block, nil
 }
 
