@@ -585,9 +585,8 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 	ce.logger.Printf("Creating new block in wave %d, round %d", 
 		ce.currentWave.GetWaveNumber(), ce.currentRound)
 
-	// Use BlockProcessor to create block
-	fmt.Print("111111111")
-	block, err := ce.blockProcessor.CreateBlock(ce.currentRound)
+	// Use BlockProcessor to create block, passing the current wave
+	block, err := ce.blockProcessor.CreateBlock(ce.currentRound, ce.currentWave.GetWaveNumber())
 	if err != nil {
 		ce.logger.Printf("Failed to create block: %v", err)
 		return nil, err
@@ -599,8 +598,8 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 		return nil, err
 	}
 
-	ce.logger.Printf("Created block %s in wave %d, round %d", 
-		block.ComputeHash(), ce.currentWave.GetWaveNumber(), ce.currentRound)
+	// ce.logger.Printf("Created block %s in wave %d, round %d", 
+	// 	block.ComputeHash(), ce.currentWave.GetWaveNumber(), ce.currentRound)
 	return block, nil
 }
 
@@ -702,13 +701,13 @@ func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
 	ce.proposals[string(blockHash)] = proposal
 
 	// Add block to DAG
-	if err := ce.dag.AddBlock(block); err != nil {
-		if err.Error() != "block already exists" {
-			return fmt.Errorf("failed to add block to DAG: %v", err)
-		}
-		// Block already exists, which is fine
-		ce.logger.Printf("Block already exists in DAG: %x", blockHash)
-	}
+	// if err := ce.dag.AddBlock(block); err != nil {
+	// 	if err.Error() != "block already exists" {
+	// 		return fmt.Errorf("failed to add block to DAG: %v", err)
+	// 	}
+	// 	// Block already exists, which is fine
+	// 	ce.logger.Printf("Block already exists in DAG: %x", blockHash)
+	// }
 
 	// Broadcast to all validators
 	for _, validator := range ce.validators {
@@ -834,10 +833,16 @@ func (ce *ConsensusEngine) verifyProposal(proposal *types.Proposal) error {
 	}
 
 	// Verify block hash matches
-	computedHash := proposal.Block.ComputeHash()
-	if !bytes.Equal(proposal.BlockHash, computedHash) {
-		// ce.logger.Printf("Block hash mismatch: expected %x, got %x", computedHash, proposal.BlockHash)
-		return fmt.Errorf("block hash mismatch")
+	// computedHash := proposal.Block.ComputeHash()
+	// if !bytes.Equal(proposal.BlockHash, computedHash) {
+	// 	// ce.logger.Printf("Block hash mismatch: expected %x, got %x", computedHash, proposal.BlockHash)
+	// 	return fmt.Errorf("block hash mismatch")
+	// }
+
+	// Add block to DAG
+	fmt.Println("(((((((((((((((((((((((())))))))))))))))))))))))", proposal.BlockHash)
+	if err := ce.dag.AddBlock(proposal.Block); err != nil {
+		return fmt.Errorf("failed to add block to DAG: %v", err)
 	}
 
 	// Verify block signature
@@ -1040,19 +1045,7 @@ func (ns *NetworkServer) handleConnection(conn net.Conn) {
 	ns.engine.logger.Printf("Received proposal for block %x from %s", 
 		proposal.BlockHash, remoteAddr)
 
-	// Add block to DAG if it exists
-	if proposal.Block != nil {
-		if err := ns.engine.dag.AddBlock(proposal.Block); err != nil {
-			if err.Error() != "block already exists" {
-				ns.engine.logger.Printf("Failed to add block to DAG: %v", err)
-				return
-			}
-			// Block already exists, which is fine
-			ns.engine.logger.Printf("Block already exists in DAG: %x", proposal.BlockHash)
-		}
-	}
-
-	// Handle proposal
+	// Instead of adding the block directly to the DAG, use HandleProposal
 	if err := ns.engine.HandleProposal(&proposal); err != nil {
 		ns.engine.logger.Printf("Error handling proposal from %s: %v", remoteAddr, err)
 		return

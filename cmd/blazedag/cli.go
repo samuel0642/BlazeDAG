@@ -48,12 +48,12 @@ func (c *CLI) Start() error {
 		return fmt.Errorf("failed to initialize: %v", err)
 	}
 
-	// Start consensus engine
+	// Start consensus engine (no block creation here)
 	if err := c.consensusEngine.Start(); err != nil {
 		return fmt.Errorf("failed to start consensus engine: %v", err)
 	}
 
-	// Start block creation and round forwarding
+	// Start block creation and round forwarding (block creation only here)
 	go c.runChain()
 
 	// Handle signals
@@ -84,7 +84,9 @@ func (c *CLI) runChain() {
 		default:
 			// Get current wave from consensus engine
 			currentWave := c.consensusEngine.GetCurrentWave()
-			
+			fmt.Println("++++++++++++++++++++++++++++")
+			fmt.Println(currentWave)
+			fmt.Println("++++++++++++++++++++++++++++")
 			// Only create block if we're in a new wave and haven't created a block yet
 			if currentWave != lastWave {
 				blockCreatedInWave = false
@@ -92,46 +94,27 @@ func (c *CLI) runChain() {
 			}
 
 			if !blockCreatedInWave {
-				// Create a block with current round number
-				fmt.Printf("1111111111")
-				block, err := c.blockProcessor.CreateBlock(types.Round(round))
+				// Create a block with current round number using consensus engine
+				block, err := c.consensusEngine.CreateBlock()
 				if err != nil {
 					log.Printf("Error creating block: %v", err)
 					continue
 				}
-
-				// Set block properties
-				block.Header.Wave = currentWave
-				block.Header.Height = height
-
-				// Show leader selection when wave changes
-				log.Printf("\n=== Wave %d Leader Selection ===", currentWave)
-	
-
-				// Process the block through consensus
-				if err := c.consensusEngine.HandleBlock(block); err != nil {
-					log.Printf("Error processing block: %v", err)
+				// Broadcast the block using consensus engine
+				if err := c.consensusEngine.BroadcastBlock(block); err != nil {
+					log.Printf("Error broadcasting block: %v", err)
 					continue
 				}
 
-				// Check block approval status
-				blockHash := block.ComputeHash()
-				isApproved := c.consensusEngine.IsBlockApproved(blockHash)
-				c.approvedBlocks[string(blockHash)] = isApproved
+				// if err := c.consensusEngine.StartNewWave(); err != nil {
+				// 	log.Printf("Error advancing wave: %v", err)
+				// }
 
-				// Log block status
-				log.Printf("Block Status:")
-				log.Printf("  Hash: %s", blockHash)
-				log.Printf("  Wave: %d", currentWave)
-				log.Printf("  Round: %d", round)
-				log.Printf("  Height: %d", height)
-				log.Printf("  Approved: %v", isApproved)
-				log.Printf("  Votes: %d/%d", c.consensusEngine.GetBlockVotes(blockHash), c.config.QuorumSize)
-
+				// Show leader selection when wave changes
+				log.Printf("\n======================== Wave %d Leader Selection =========================", currentWave)
 				// Update current round and mark block as created
 				c.currentRound = round
 				blockCreatedInWave = true
-
 				// Increment round and height
 				round++
 				height++
