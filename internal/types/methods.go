@@ -1,28 +1,34 @@
 package types
 
 import (
-	"bytes"
+	// "bytes"
 	"crypto/sha256"
 	// "encoding/hex"
-	"encoding/gob"
+	// "encoding/gob"
 	"encoding/json"
+	"fmt"
 )
 
-// ComputeHash returns the hash of the block
+func mustJSON(v interface{}) string {
+	b, _ := json.MarshalIndent(v, "", "  ")
+	return string(b)
+}
+
+// ComputeHash returns the hash of the block header only
 func (b *Block) ComputeHash() Hash {
-	if b.hash == nil {
-		// Create a copy of the block without the hash field
-		blockCopy := &Block{
-			Header:      b.Header,
-			Body:        b.Body,
-			Certificate: b.Certificate,
+	// Canonicalize header fields
+	if b.Header != nil {
+		if b.Header.ParentHash == nil {
+			b.Header.ParentHash = []byte{}
 		}
-		var buf bytes.Buffer
-		gob.NewEncoder(&buf).Encode(blockCopy)
-		hash := sha256.Sum256(buf.Bytes())
-		b.hash = hash[:]
+		if b.Header.References == nil {
+			b.Header.References = []*Reference{}
+		}
 	}
-	return b.hash
+	fmt.Printf("BlockHeader to hash: %s\n", mustJSON(b.Header))
+	data, _ := json.Marshal(b.Header)
+	hash := sha256.Sum256(data)
+	return hash[:]
 }
 
 // GetLatestBlock returns the latest block
