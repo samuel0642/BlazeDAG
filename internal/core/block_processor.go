@@ -69,12 +69,38 @@ type BlockProcessor struct {
 
 // NewBlockProcessor creates a new block processor
 func NewBlockProcessor(config *Config, stateManager *StateManager, dag *DAG) *BlockProcessor {
-	return &BlockProcessor{
+	bp := &BlockProcessor{
 		config:       config,
 		stateManager: stateManager,
 		dag:          dag,
 		mempool:      NewMempool(),
 	}
+
+	// Load existing blocks into DAG
+	blocks, err := stateManager.storage.GetLatestBlocks(100) // Load fewer blocks
+	if err != nil {
+		log.Printf("Warning: Failed to load blocks from storage: %v", err)
+	} else {
+		// Filter out invalid blocks
+		validBlocks := make([]*types.Block, 0)
+		for _, block := range blocks {
+			// Skip blocks with height 0 and no references
+			if block.Header.Height == 0 && len(block.Header.References) == 0 {
+				continue
+			}
+			validBlocks = append(validBlocks, block)
+		}
+
+		// // Add valid blocks to DAG
+		// for _, block := range validBlocks {
+		// 	if err := dag.AddBlock(block); err != nil {
+		// 		log.Printf("Warning: Failed to add block %s to DAG: %v", block.ComputeHash(), err)
+		// 	}
+		// }
+		log.Printf("Loaded %d valid blocks into DAG", len(validBlocks))
+	}
+
+	return bp
 }
 
 // CreateBlock creates a new block
@@ -86,21 +112,28 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 	txs := bp.mempool.GetTransactions()
 	log.Printf("Creating new block with %d transactions for round %d", len(txs), round)
 
-	// Get latest blocks from other validators
-	latestBlocks := bp.dag.GetRecentBlocks(10) // Get 10 most recent blocks
-	references := make([]*types.Reference, 0, len(latestBlocks))
-
-	// Create references to other validators' blocks
-	for _, block := range latestBlocks {
-		// Only reference blocks from other validators
-		if string(block.Header.Validator) != string(bp.config.NodeID) {
-			references = append(references, &types.Reference{
-				BlockHash: block.ComputeHash(),
-				Round:     block.Header.Round,
-				Wave:      block.Header.Wave,
-				Type:      types.ReferenceTypeStandard,
-			})
+	// Find all blocks from the previous wave (currentWave-1)
+	prevWave := currentWave - 1
+	prevWaveBlocks := make([]*types.Block, 0)
+	allBlocks := bp.dag.GetRecentBlocks(10) // You may need to implement this if not present
+	
+	for _, block := range allBlocks {
+		if block.Header.Wave == prevWave {
+			prevWaveBlocks = append(prevWaveBlocks, block)
 		}
+	}
+	log.Printf("pppppppppppppppppppppppppppppppppppppppAll blocks: %d, prevWave: %d, prevWaveBlocks: %d", len(allBlocks), prevWave, len(prevWaveBlocks))
+
+
+	references := make([]*types.Reference, 0, len(prevWaveBlocks))
+	for _, block := range prevWaveBlocks {
+		// Reference all blocks from the previous wave
+		references = append(references, &types.Reference{
+			BlockHash: block.ComputeHash(),
+			Round:     block.Header.Round,
+			Wave:      block.Header.Wave,
+			Type:      types.ReferenceTypeStandard,
+		})
 	}
 
 	// Create block header
@@ -137,6 +170,11 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 	// Save block to storage
 	if err := bp.stateManager.storage.SaveBlock(block); err != nil {
 		return nil, err
+	}
+
+	// Add block to DAG
+	if err := bp.dag.AddBlock(block); err != nil {
+		log.Printf("Warning: Failed to add block to DAG: %v", err)
 	}
 
 	// Remove processed transactions from mempool

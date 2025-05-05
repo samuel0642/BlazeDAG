@@ -6,7 +6,7 @@ import (
 	// "encoding/hex"
 	// "encoding/gob"
 	"encoding/json"
-	"fmt"
+	// "fmt"
 )
 
 func mustJSON(v interface{}) string {
@@ -25,7 +25,7 @@ func (b *Block) ComputeHash() Hash {
 			b.Header.References = []*Reference{}
 		}
 	}
-	fmt.Printf("BlockHeader to hash: %s\n", mustJSON(b.Header))
+	// fmt.Printf("BlockHeader to hash: %s\n", mustJSON(b.Header))
 	data, _ := json.Marshal(b.Header)
 	hash := sha256.Sum256(data)
 	return hash[:]
