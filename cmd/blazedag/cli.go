@@ -84,9 +84,9 @@ func (c *CLI) runChain() {
 		default:
 			// Get current wave from consensus engine
 			currentWave := c.consensusEngine.GetCurrentWave()
-			fmt.Println("++++++++++++++++++++++++++++")
-			fmt.Println(currentWave)
-			fmt.Println("++++++++++++++++++++++++++++")
+			// fmt.Println("++++++++++++++++++++++++++++")
+			// fmt.Println(currentWave)
+			// fmt.Println("++++++++++++++++++++++++++++")
 			// Only create block if we're in a new wave and haven't created a block yet
 			if currentWave != lastWave {
 				blockCreatedInWave = false

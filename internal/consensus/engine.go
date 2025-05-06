@@ -286,8 +286,11 @@ func (ce *ConsensusEngine) selectLeader() {
 	// Select leader based on wave number
 	leaderIndex := int(ce.currentWave.GetWaveNumber()) % len(ce.validators)
 	ce.currentLeader = ce.validators[leaderIndex]
-	// ce.logger.Printf("Selected leader %s for wave %d", 
-	// 	ce.currentLeader, ce.currentWave.GetWaveNumber())
+	
+	// Print leader selection
+	// fmt.Printf("\n======================== Wave %d Leader Selection =========================\n", ce.currentWave.GetWaveNumber())
+	fmt.Printf("***Leader selected*** %s\n", ce.currentLeader)
+	// fmt.Printf("======================================================================\n\n")
 }
 
 // IsLeader checks if the current node is the leader
@@ -840,7 +843,7 @@ func (ce *ConsensusEngine) verifyProposal(proposal *types.Proposal) error {
 	}
 
 	// Add block to DAG
-	fmt.Println("(((((((((((((((((((((((())))))))))))))))))))))))", proposal.BlockHash)
+	// fmt.Println("(((((((((((((((((((((((())))))))))))))))))))))))", proposal.BlockHash)
 	if err := ce.dag.AddBlock(proposal.Block); err != nil {
 		return fmt.Errorf("failed to add block to DAG: %v", err)
 	}

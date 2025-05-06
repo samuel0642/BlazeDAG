@@ -122,7 +122,7 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 			prevWaveBlocks = append(prevWaveBlocks, block)
 		}
 	}
-	log.Printf("pppppppppppppppppppppppppppppppppppppppAll blocks: %d, prevWave: %d, prevWaveBlocks: %d", len(allBlocks), prevWave, len(prevWaveBlocks))
+	// log.Printf("pppppppppppppppppppppppppppppppppppppppAll blocks: %d, prevWave: %d, prevWaveBlocks: %d", len(allBlocks), prevWave, len(prevWaveBlocks))
 
 
 	references := make([]*types.Reference, 0, len(prevWaveBlocks))
