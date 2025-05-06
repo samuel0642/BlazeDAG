@@ -4,6 +4,7 @@ import (
 	"log"
 	"sync"
 	"time"
+	"fmt"
 
 	"github.com/CrossDAG/BlazeDAG/internal/core"
 	"github.com/CrossDAG/BlazeDAG/internal/storage"
@@ -60,7 +61,7 @@ func (vs *ValidatorSet) QuorumSize() int {
 
 // NewConsensus creates a new consensus engine
 func NewConsensus(config *Config, state *types.State, storage *storage.Storage) *Consensus {
-	return &Consensus{
+	c := &Consensus{
 		config:       config,
 		state:        state,
 		storage:      storage,
@@ -71,11 +72,23 @@ func NewConsensus(config *Config, state *types.State, storage *storage.Storage) 
 		commitChan:   make(chan *types.Block, 100),
 		currentWave:  1,
 		currentRound: 0,
+		height:       0,
 	}
+
+	// Initialize block creator with all required arguments
+	c.blockCreator = core.NewBlockCreator(&core.Config{
+		NodeID: types.Address(config.NodeID),
+	}, c.state, c.storage)
+
+	return c
 }
 
 // Start starts the consensus engine
 func (c *Consensus) Start() error {
+	if c == nil {
+		return fmt.Errorf("consensus engine is nil")
+	}
+
 	// Start goroutines for handling proposals, votes, and commits
 	go c.handleProposals()
 	go c.handleVotes()
@@ -89,27 +102,68 @@ func (c *Consensus) Start() error {
 
 // consensusLoop runs the main consensus loop
 func (c *Consensus) consensusLoop() {
+	waveTimer := time.NewTimer(c.config.WaveTimeout)
+	defer waveTimer.Stop()
+
 	for {
-		// Check if we are the leader for this round
-		if c.isLeader() {
-			// Create and propose a new block
-			block, err := c.blockCreator.CreateBlock()
-			if err != nil {
-				continue
+		select {
+		case <-waveTimer.C:
+			// Wave timeout - advance to next wave
+			c.mu.Lock()
+			c.currentWave++
+			c.currentRound = 0
+			c.mu.Unlock()
+			
+			// Reset timer for next wave
+			waveTimer.Reset(c.config.WaveTimeout)
+			
+			// Log wave transition
+			log.Printf("\n======================== Wave %d Leader Selection =========================", c.currentWave)
+			
+		default:
+			// Check if we are the leader for this round
+			if c.isLeader() {
+				// Create and propose a new block
+				block, err := c.blockCreator.CreateBlock()
+				if err != nil {
+					log.Printf("[Consensus] Error creating block: %v", err)
+					time.Sleep(c.config.RoundDuration)
+					continue
+				}
+
+				// Set block wave and round
+				block.Header.Wave = c.currentWave
+				block.Header.Round = c.currentRound
+
+				// Broadcast the block proposal
+				c.broadcastProposal(block)
+				
+				// Increment round after proposing
+				c.mu.Lock()
+				c.currentRound++
+				c.mu.Unlock()
 			}
 
-			// Broadcast the block proposal
-			c.broadcastProposal(block)
+			// Wait for the round duration
+			time.Sleep(c.config.RoundDuration)
 		}
-
-		// Wait for the round duration
-		time.Sleep(c.config.RoundDuration)
 	}
 }
 
 // handleProposals handles incoming block proposals
 func (c *Consensus) handleProposals() {
+	fmt.Println(".............................................................")
+
+	if c.proposalChan == nil {
+		fmt.Println("proposalChan is nil")
+		return
+	}
+
+	fmt.Println(".............................................................")
+
 	for block := range c.proposalChan {
+		
+		fmt.Println(".............................................................%x", block.ComputeHash())
 		// Validate the block
 		if !c.validateBlock(block) {
 			log.Printf("[Consensus] Invalid block received: %x", block.ComputeHash())
@@ -199,12 +253,28 @@ func (c *Consensus) validateBlock(block *types.Block) bool {
 
 // broadcastProposal broadcasts a block proposal
 func (c *Consensus) broadcastProposal(block *types.Block) {
-	// TODO: Implement proper block broadcasting
+	// Send block to local proposal channel
+	c.proposalChan <- block
+
+	// Log broadcast to other validators
+	for _, validator := range c.validatorSet.validators {
+		if validator != types.Address(c.config.NodeID) {
+			log.Printf("[Consensus] Broadcasting block %x to validator %s", block.ComputeHash(), validator)
+		}
+	}
 }
 
 // broadcastVote broadcasts a vote
 func (c *Consensus) broadcastVote(vote *types.Vote) {
-	// TODO: Implement proper vote broadcasting
+	// Send vote to local vote channel
+	c.voteChan <- vote
+
+	// Log broadcast to other validators
+	for _, validator := range c.validatorSet.validators {
+		if validator != types.Address(c.config.NodeID) {
+			log.Printf("[Consensus] Broadcasting vote for block %x to validator %s", vote.BlockHash, validator)
+		}
+	}
 }
 
 // processBlock processes a committed block
