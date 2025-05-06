@@ -23,6 +23,7 @@ type CLI struct {
 	stateManager    *state.StateManager
 	blockProcessor  *core.BlockProcessor
 	consensusEngine *consensus.ConsensusEngine
+	consensus       *consensus.Consensus
 	logger          *log.Logger
 	scanner         *bufio.Scanner
 	stopChan        chan struct{}
@@ -53,6 +54,10 @@ func (c *CLI) Start() error {
 		return fmt.Errorf("failed to start consensus engine: %v", err)
 	}
 
+	
+	if err := c.consensus.Start(); err != nil {
+		return fmt.Errorf("failed to start consensus: %v", err)
+	}
 	// Start block creation and round forwarding (block creation only here)
 	go c.runChain()
 
@@ -165,6 +170,9 @@ func (c *CLI) initialize() error {
 
 	// Initialize consensus engine
 	c.consensusEngine = consensus.NewConsensusEngine(c.config, c.stateManager, c.blockProcessor)
+
+	// Initialize consensus
+	c.consensus = consensus.NewConsensus(c.config, initialState, storage)
 
 	return nil
 }
