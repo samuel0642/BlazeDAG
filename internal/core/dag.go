@@ -33,9 +33,9 @@ func (d *DAG) AddBlock(block *types.Block) error {
 
 	// Check if block already exists
 	blockHash := block.ComputeHash()
-	fmt.Println("00000000000000000000000000000000000000000000000000")
-	fmt.Println(blockHash)
-	fmt.Println("00000000000000000000000000000000000000000000000000")
+	// fmt.Println("00000000000000000000000000000000000000000000000000")
+	// fmt.Println(blockHash)
+	// fmt.Println("00000000000000000000000000000000000000000000000000")
 	if _, exists := d.blocks[string(blockHash)]; exists {
 		return fmt.Errorf("block already exists")
 	}

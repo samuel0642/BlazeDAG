@@ -3,7 +3,7 @@ package consensus
 import (
 	"sync"
 	"time"
-	"fmt"
+	// "fmt"
 	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
@@ -46,11 +46,11 @@ func (wm *WaveManager) run() {
 		default:
 			// Handle wave phases
 			if true {
-				fmt.Println("------------------------------------")
+				// fmt.Println("------------------------------------")
 				if err := wm.handleWaveProposing(); err != nil {
 					wm.engine.logger.Printf("Error handling wave proposing: %v", err)
 				}
-				fmt.Println("------------------------------------")
+				// fmt.Println("------------------------------------")
 			}
 			time.Sleep(10000 * time.Millisecond) // Avoid busy waiting
 		}
