@@ -70,32 +70,6 @@ func NewEngine(config *Config) *Engine {
 	}
 }
 
-// HandleProposal handles a new block proposal
-func (e *Engine) HandleProposal(proposal *types.Proposal) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	e.logger.Printf("Received proposal for block %s in wave %d, round %d", 
-		proposal.BlockHash, proposal.Wave, proposal.Round)
-
-	// Add proposal to proposals map
-	e.proposals[string(proposal.BlockHash)] = proposal
-
-	// Add block to DAG if it exists
-	if proposal.Block != nil {
-		if err := e.dag.AddBlock(proposal.Block); err != nil {
-			if err.Error() != "block already exists" {
-				e.logger.Printf("Failed to add block to DAG: %v", err)
-				return err
-			}
-			// Block already exists, which is fine
-			e.logger.Printf("Block already exists in DAG: %s", proposal.BlockHash)
-		}
-	}
-
-	return nil
-}
-
 // HandleVote handles a new vote on a proposal
 func (e *Engine) HandleVote(vote *types.Vote) error {
 	e.mu.Lock()
@@ -853,6 +827,8 @@ func (ce *ConsensusEngine) verifyProposal(proposal *types.Proposal) error {
 		return fmt.Errorf("invalid block signature: %v", err)
 	}
 
+	fmt.Println("------------------------------------PROPOSAL VERIFIED------------------------------------")
+
 	return nil
 }
 
@@ -911,7 +887,7 @@ func (ce *ConsensusEngine) GetBlock(hash types.Hash) (*types.Block, error) {
 // NetworkServer handles incoming connections and messages
 type NetworkServer struct {
 	listener net.Listener
-	engine   *ConsensusEngine
+	consensusEngine   *ConsensusEngine
 	running  bool
 	mu       sync.RWMutex
 	port     string
@@ -940,7 +916,7 @@ func NewNetworkServer(engine *ConsensusEngine) *NetworkServer {
 	}
 
 	return &NetworkServer{
-		engine: engine,
+		consensusEngine: engine,
 		port:   port,
 	}
 }
@@ -966,7 +942,7 @@ func (ns *NetworkServer) Start() error {
 	// Start accepting connections
 	go ns.acceptConnections()
 
-	ns.engine.logger.Printf("Network server started on port %s", ns.port)
+	ns.consensusEngine.logger.Printf("Network server started on port %s", ns.port)
 	return nil
 }
 
@@ -984,7 +960,7 @@ func (ns *NetworkServer) Stop() {
 		ns.listener.Close()
 	}
 	
-	ns.engine.logger.Printf("Network server stopped on port %s", ns.port)
+	ns.consensusEngine.logger.Printf("Network server stopped on port %s", ns.port)
 }
 
 // acceptConnections accepts incoming connections
@@ -993,7 +969,7 @@ func (ns *NetworkServer) acceptConnections() {
 		conn, err := ns.listener.Accept()
 		if err != nil {
 			if ns.running {
-				ns.engine.logger.Printf("Error accepting connection: %v", err)
+				ns.consensusEngine.logger.Printf("Error accepting connection: %v", err)
 			}
 			continue
 		}
@@ -1008,7 +984,7 @@ func (ns *NetworkServer) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
 	remoteAddr := conn.RemoteAddr().String()
-	ns.engine.logger.Printf("New connection from %s", remoteAddr)
+	ns.consensusEngine.logger.Printf("New connection from %s", remoteAddr)
 
 	// Set read deadline
 	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
@@ -1017,7 +993,7 @@ func (ns *NetworkServer) handleConnection(conn net.Conn) {
 	buf := make([]byte, 4096)
 	n, err := conn.Read(buf)
 	if err != nil {
-		ns.engine.logger.Printf("Error reading from %s: %v", remoteAddr, err)
+		ns.consensusEngine.logger.Printf("Error reading from %s: %v", remoteAddr, err)
 		return
 	}
 
@@ -1028,36 +1004,36 @@ func (ns *NetworkServer) handleConnection(conn net.Conn) {
 	decoder := gob.NewDecoder(reader)
 	var proposal types.Proposal
 	if err := decoder.Decode(&proposal); err != nil {
-		ns.engine.logger.Printf("Error decoding message from %s: %v", remoteAddr, err)
+		ns.consensusEngine.logger.Printf("Error decoding message from %s: %v", remoteAddr, err)
 		return
 	}
 
 	// Verify the proposal came from a valid validator
 	isValidValidator := false
-	for _, v := range ns.engine.validators {
+	for _, v := range ns.consensusEngine.validators {
 		if v == proposal.Proposer {
 			isValidValidator = true
 			break
 		}
 	}
 	if !isValidValidator {
-		ns.engine.logger.Printf("Invalid proposer: %s", string(proposal.Proposer))
+		ns.consensusEngine.logger.Printf("Invalid proposer: %s", string(proposal.Proposer))
 		return
 	}
 
-	ns.engine.logger.Printf("Received proposal for block %x from %s", 
+	ns.consensusEngine.logger.Printf("Received proposal for block %x from %s", 
 		proposal.BlockHash, remoteAddr)
 
 	// Instead of adding the block directly to the DAG, use HandleProposal
-	if err := ns.engine.HandleProposal(&proposal); err != nil {
-		ns.engine.logger.Printf("Error handling proposal from %s: %v", remoteAddr, err)
+	if err := ns.consensusEngine.HandleProposal(&proposal); err != nil {
+		ns.consensusEngine.logger.Printf("Error handling proposal from %s: %v", remoteAddr, err)
 		return
 	}
 
 	// Send acknowledgment
 	ack := []byte("ACK")
 	if _, err := conn.Write(ack); err != nil {
-		ns.engine.logger.Printf("Error sending acknowledgment to %s: %v", remoteAddr, err)
+		ns.consensusEngine.logger.Printf("Error sending acknowledgment to %s: %v", remoteAddr, err)
 		return
 	}
 }

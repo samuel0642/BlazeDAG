@@ -55,10 +55,6 @@ func (c *CLI) Start() error {
 	}
 
 	
-	if err := c.consensus.Start(); err != nil {
-		return fmt.Errorf("failed to start consensus: %v", err)
-	}
-	// Start block creation and round forwarding (block creation only here)
 	go c.runChain()
 
 	// Handle signals
