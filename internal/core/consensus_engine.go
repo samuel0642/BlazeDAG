@@ -20,35 +20,6 @@ func NewConsensusEngine(config *Config, stateManager *StateManager) *ConsensusEn
 	}
 }
 
-// ProcessBlock processes a new block
-func (ce *ConsensusEngine) ProcessBlock(block *types.Block) error {
-	state := ce.stateManager.GetState()
-	// Create proposal
-	proposal := ce.createProposal(block)
-
-	// Add block to pending blocks
-	state.PendingBlocks[string(block.ComputeHash())] = block
-
-	// Broadcast proposal
-	ce.broadcastProposal(proposal)
-
-	// Start timeout
-	go ce.handleTimeout(proposal)
-	return nil
-}
-
-// HandleMessage handles a consensus message
-func (ce *ConsensusEngine) HandleMessage(msg *types.ConsensusMessage) error {
-	switch msg.Type {
-	case types.MessageTypeProposal:
-		ce.handleProposal(msg.Proposal)
-	case types.MessageTypeVote:
-		ce.handleVote(msg.Vote)
-	case types.MessageTypeComplaint:
-		ce.handleComplaint(msg.Complaint)
-	}
-	return nil
-}
 
 // createProposal creates a new proposal
 func (ce *ConsensusEngine) createProposal(block *types.Block) *types.Proposal {
@@ -79,27 +50,6 @@ func (ce *ConsensusEngine) broadcastProposal(proposal *types.Proposal) {
 }
 
 // handleTimeout handles proposal timeout
-func (ce *ConsensusEngine) handleTimeout(proposal *types.Proposal) {
-	// TODO: Implement timeout handling
-}
-
-// handleProposal handles a proposal message
-func (ce *ConsensusEngine) handleProposal(proposal *types.Proposal) {
-	state := ce.stateManager.GetState()
-	if !ce.validateProposal(proposal) {
-		return
-	}
-
-	// Add block to pending blocks
-	state.PendingBlocks[string(proposal.Block.ComputeHash())] = proposal.Block
-
-	// Track proposal
-	ce.trackProposal(proposal)
-
-	// Create and broadcast vote
-	vote := ce.createVote(proposal)
-	ce.broadcastVote(vote)
-}
 
 // handleVote handles a vote message
 func (ce *ConsensusEngine) handleVote(vote *types.Vote) {

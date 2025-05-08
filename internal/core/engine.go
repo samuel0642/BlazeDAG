@@ -58,24 +58,6 @@ func NewEngine(config *Config, storage *storage.Storage) *Engine {
 	}
 }
 
-// Start initializes and starts the engine
-func (e *Engine) Start() error {
-	// Initialize components
-	e.networkManager = NewNetworkManager(e.config, e.stateManager)
-
-	// Start components
-	if err := e.networkManager.Start(); err != nil {
-		return err
-	}
-
-	// Start block creation loop
-	go e.blockCreationLoop()
-
-	// Start consensus loop
-	go e.consensusLoop()
-
-	return nil
-}
 
 // Stop gracefully shuts down the engine
 func (e *Engine) Stop() {
@@ -107,23 +89,6 @@ func (e *Engine) blockCreationLoop() {
 	}
 }
 
-// consensusLoop handles the consensus process
-func (e *Engine) consensusLoop() {
-	for {
-		select {
-		case block := <-e.blockChan:
-			if e.config.IsValidator {
-				// Start consensus process for the block
-				go e.consensusEngine.ProcessBlock(block)
-			}
-		case msg := <-e.consensusChan:
-			// Handle consensus messages
-			e.consensusEngine.HandleMessage(msg)
-		case <-e.stopChan:
-			return
-		}
-	}
-}
 
 // State represents the current state of the engine
 type State struct {
