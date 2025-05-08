@@ -144,61 +144,8 @@ func (n *P2PNode) GetID() PeerID {
 	return n.id
 }
 
-// acceptConnections accepts incoming connections
-func (n *P2PNode) acceptConnections() {
-	for {
-		select {
-		case <-n.ctx.Done():
-			return
-		default:
-			conn, err := n.server.Accept()
-			if err != nil {
-				if !n.running {
-					return
-				}
-				fmt.Printf("Failed to accept connection: %v\n", err)
-				continue
-			}
 
-			// Handle new connection
-			go n.handleConnection(conn)
-		}
-	}
-}
 
-// handleConnection handles a new connection
-func (n *P2PNode) handleConnection(conn net.Conn) {
-	defer conn.Close()
-
-	// Read peer ID from connection
-	buf := make([]byte, 1024)
-	bytesRead, err := conn.Read(buf)
-	if err != nil {
-		fmt.Printf("Failed to read peer ID: %v\n", err)
-		return
-	}
-
-	peerID := PeerID(string(buf[:bytesRead]))
-	n.mu.Lock()
-	n.peers[peerID] = conn
-	n.mu.Unlock()
-
-	// Keep connection alive
-	for {
-		select {
-		case <-n.ctx.Done():
-			return
-		default:
-			// Read messages
-			buf := make([]byte, 1024)
-			_, err := conn.Read(buf)
-			if err != nil {
-				n.Disconnect(peerID)
-				return
-			}
-		}
-	}
-}
 
 // discoverPeers periodically discovers new peers
 func (n *P2PNode) discoverPeers() {
