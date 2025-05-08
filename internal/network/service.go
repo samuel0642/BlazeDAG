@@ -112,39 +112,7 @@ func (s *Service) Stop() error {
 	return nil
 }
 
-// acceptConnections accepts incoming connections
-func (s *Service) acceptConnections(listener net.Listener) {
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			log.Printf("Failed to accept connection: %v", err)
-			continue
-		}
 
-		// Handle new connection
-		go s.handleConnection(conn)
-	}
-}
-
-// handleConnection handles a new connection
-func (s *Service) handleConnection(conn net.Conn) {
-	defer conn.Close()
-
-	// Read peer information
-	peer := &types.Peer{
-		Address:    types.Address(conn.RemoteAddr().String()),
-		LastSeen:   time.Now(),
-		Connection: conn,
-	}
-
-	// Add peer
-	s.addPeer(peer)
-
-	// Handle messages from peer
-	for {
-		// TODO: Implement message handling
-	}
-}
 
 // connectToSeed connects to a seed node
 func (s *Service) connectToSeed(seed types.Address) {
