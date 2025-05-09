@@ -277,9 +277,6 @@ func (s *Service) handleBlockMessage(msg *types.NetworkMessage) {
 	// TODO: Implement block message handling
 }
 
-func (s *Service) handleVoteMessage(msg *types.NetworkMessage) {
-	// TODO: Implement vote message handling
-}
 
 func (s *Service) handleCertificateMessage(msg *types.NetworkMessage) {
 	// TODO: Implement certificate message handling

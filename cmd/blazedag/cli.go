@@ -32,6 +32,7 @@ type CLI struct {
 	stopChan        chan struct{}
 	currentRound    int
 	approvedBlocks  map[string]bool // Changed from types.Hash to string
+	savedLeaderBlock *types.Block  // Add this field to store the wave leader's block
 }
 
 // NewCLI creates a new CLI instance
@@ -187,6 +188,7 @@ func (c *CLI) runChain() {
 			if currentWave != lastWave {
 				blockCreatedInWave = false
 				lastWave = currentWave
+				c.savedLeaderBlock = nil // Clear saved block on wave change
 			}
 
 			if !blockCreatedInWave {
@@ -202,119 +204,124 @@ func (c *CLI) runChain() {
 					continue
 				}
 
-				// Create and broadcast vote for this block
-				vote := &types.Vote{
-					BlockHash: block.ComputeHash(),
-					Round:     types.Round(round),
-					Wave:      currentWave,
-					Validator: types.Address(c.config.NodeID),
-					Timestamp: time.Now(),
-				}
-
-				// Broadcast vote to all validators
-				for _, validator := range c.consensusEngine.GetValidators() {
-					if string(validator) != c.config.NodeID { // Don't send to self
-						// Get validator's address from config
-						var validatorAddr string
-						switch string(validator) {
-						case "validator1":
-							validatorAddr = "localhost:3000"
-						case "validator2":
-							validatorAddr = "localhost:3001"
-						case "validator3":
-							validatorAddr = "localhost:3002"
-						default:
-							log.Printf("Warning: Unknown validator %s", validator)
-							continue
-						}
-
-						// Extract port and add 1000 for vote port
-						_, port, err := net.SplitHostPort(validatorAddr)
-						if err != nil {
-							log.Printf("Error parsing validator address: %v", err)
-							continue
-						}
-						portNum, err := strconv.Atoi(port)
-						if err != nil {
-							log.Printf("Error converting port to number: %v", err)
-							continue
-						}
-						votePort := strconv.Itoa(portNum + 1000)
-						voteAddr := "localhost:" + votePort
-
-						log.Printf("Broadcasting vote for block %x to validator %s at %s", 
-							vote.BlockHash, validator, voteAddr)
-
-						// Try to connect with retries
-						var conn net.Conn
-						maxRetries := 3
-						for i := 0; i < maxRetries; i++ {
-							conn, err = net.Dial("tcp", voteAddr)
-							if err == nil {
-								break
-							}
-							log.Printf("Retry %d: Error connecting to validator %s at %s: %v", 
-								i+1, validator, voteAddr, err)
-							time.Sleep(time.Second)
-						}
-						if err != nil {
-							log.Printf("Failed to connect to validator %s after %d retries", 
-								validator, maxRetries)
-							continue
-						}
-						defer conn.Close()
-
-						// Set write deadline
-						conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-
-						// Create a buffer to hold the encoded vote
-						var buf bytes.Buffer
-						encoder := gob.NewEncoder(&buf)
-						if err := encoder.Encode(vote); err != nil {
-							log.Printf("Error encoding vote for validator %s: %v", validator, err)
-							continue
-						}
-
-						// Write the encoded vote to the connection
-						if _, err := conn.Write(buf.Bytes()); err != nil {
-							log.Printf("Error sending vote to validator %s: %v", validator, err)
-							continue
-						}
-
-						// Wait for acknowledgment with a longer timeout
-						ackBuf := make([]byte, 3) // "ACK" is 3 bytes
-						conn.SetReadDeadline(time.Now().Add(10 * time.Second))
-						if _, err := conn.Read(ackBuf); err != nil {
-							if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-								log.Printf("Timeout waiting for acknowledgment from validator %s", validator)
-							} else {
-								log.Printf("Error receiving acknowledgment from validator %s: %v", validator, err)
-							}
-							continue
-						}
-
-						if !bytes.Equal(ackBuf, []byte("ACK")) {
-							log.Printf("Invalid acknowledgment from validator %s", validator)
-							continue
-						}
-
-						log.Printf("Successfully sent vote to validator %s", validator)
+				// Only proceed with voting if we have a saved leader block
+				if c.consensusEngine.GetSavedLeaderBlock() != nil {
+					fmt.Println("jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj")
+					// Create and broadcast vote for this block
+					vote := &types.Vote{ 
+						BlockHash: c.consensusEngine.GetSavedLeaderBlock().ComputeHash(),
+						Round:     types.Round(round),
+						Block:     c.consensusEngine.GetSavedLeaderBlock(),
+						Wave:      currentWave,
+						Validator: types.Address(c.config.NodeID),
+						Timestamp: time.Now(),
 					}
-				}
 
-				// Also handle the vote locally
-				if err := c.consensusEngine.HandleVote(vote); err != nil {
-					log.Printf("Error handling local vote: %v", err)
-				}
+					// Broadcast vote to all validators
+					for _, validator := range c.consensusEngine.GetValidators() {
+						if string(validator) != c.config.NodeID { // Don't send to self
+							// Get validator's address from config
+							var validatorAddr string
+							switch string(validator) {
+							case "validator1":
+								validatorAddr = "localhost:3000"
+							case "validator2":
+								validatorAddr = "localhost:3001"
+							case "validator3":
+								validatorAddr = "localhost:3002"
+							default:
+								log.Printf("Warning: Unknown validator %s", validator)
+								continue
+							}
 
-				// Show leader selection when wave changes
-				log.Printf("\n======================== Wave %d Leader Selection =========================", currentWave)
-				// Update current round and mark block as created
-				c.currentRound = round
-				blockCreatedInWave = true
-				// Increment round and height
-				round++
-				height++
+							// Extract port and add 1000 for vote port
+							_, port, err := net.SplitHostPort(validatorAddr)
+							if err != nil {
+								log.Printf("Error parsing validator address: %v", err)
+								continue
+							}
+							portNum, err := strconv.Atoi(port)
+							if err != nil {
+								log.Printf("Error converting port to number: %v", err)
+								continue
+							}
+							votePort := strconv.Itoa(portNum + 1000)
+							voteAddr := "localhost:" + votePort
+
+							log.Printf("Broadcasting vote for block %x to validator %s at %s", 
+								vote.BlockHash, validator, voteAddr)
+
+							// Try to connect with retries
+							var conn net.Conn
+							maxRetries := 3
+							for i := 0; i < maxRetries; i++ {
+								conn, err = net.Dial("tcp", voteAddr)
+								if err == nil {
+									break
+								}
+								log.Printf("Retry %d: Error connecting to validator %s at %s: %v", 
+									i+1, validator, voteAddr, err)
+								time.Sleep(time.Second)
+							}
+							if err != nil {
+								log.Printf("Failed to connect to validator %s after %d retries", 
+									validator, maxRetries)
+								continue
+							}
+							defer conn.Close()
+
+							// Set write deadline
+							conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+
+							// Create a buffer to hold the encoded vote
+							var buf bytes.Buffer
+							encoder := gob.NewEncoder(&buf)
+							if err := encoder.Encode(vote); err != nil {
+								log.Printf("Error encoding vote for validator %s: %v", validator, err)
+								continue
+							}
+
+							// Write the encoded vote to the connection
+							if _, err := conn.Write(buf.Bytes()); err != nil {
+								log.Printf("Error sending vote to validator %s: %v", validator, err)
+								continue
+							}
+
+							// Wait for acknowledgment with a longer timeout
+							ackBuf := make([]byte, 3) // "ACK" is 3 bytes
+							conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+							if _, err := conn.Read(ackBuf); err != nil {
+								if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+									log.Printf("Timeout waiting for acknowledgment from validator %s", validator)
+								} else {
+									log.Printf("Error receiving acknowledgment from validator %s: %v", validator, err)
+								}
+								continue
+							}
+
+							if !bytes.Equal(ackBuf, []byte("ACK")) {
+								log.Printf("Invalid acknowledgment from validator %s", validator)
+								continue
+							}
+
+							log.Printf("Successfully sent vote to validator %s", validator)
+						}
+					}
+
+					// Also handle the vote locally
+					if err := c.consensusEngine.HandleVote(vote); err != nil {
+						log.Printf("Error handling local vote: %v", err)
+					}
+
+					// Show leader selection when wave changes
+					log.Printf("\n======================== Wave %d Leader Selection =========================", currentWave)
+					// Update current round and mark block as created
+					c.currentRound = round
+					blockCreatedInWave = true
+					// Increment round and height
+					round++
+					height++
+				}
 			}
 
 			// Sleep for the configured round duration
