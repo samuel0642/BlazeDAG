@@ -51,19 +51,6 @@ func (ce *ConsensusEngine) broadcastProposal(proposal *types.Proposal) {
 
 // handleTimeout handles proposal timeout
 
-// handleVote handles a vote message
-func (ce *ConsensusEngine) handleVote(vote *types.Vote) {
-	if !ce.isProposalPending(vote.ProposalID) {
-		return
-	}
-
-	ce.trackVote(vote.ProposalID, vote)
-
-	if ce.hasQuorum(vote.ProposalID) {
-		ce.finalizeProposal(vote.ProposalID)
-	}
-}
-
 // handleComplaint handles a complaint message
 func (ce *ConsensusEngine) handleComplaint(complaint *types.Complaint) {
 	// TODO: Implement complaint handling

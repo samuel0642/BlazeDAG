@@ -70,17 +70,6 @@ func NewEngine(config *Config) *Engine {
 	}
 }
 
-// HandleVote handles a new vote on a proposal
-func (e *Engine) HandleVote(vote *types.Vote) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	e.logger.Printf("Received vote for block %s from validator %s in wave %d, round %d",
-		vote.BlockHash, vote.Validator, vote.Wave, vote.Round)
-	e.votes[string(vote.BlockHash)] = append(e.votes[string(vote.BlockHash)], vote)
-	return nil
-}
-
 // HasQuorum checks if a proposal has received enough votes to reach quorum
 func (e *Engine) HasQuorum() bool {
 	e.mu.RLock()
@@ -122,6 +111,7 @@ type ConsensusEngine struct {
 	blockProcessor *core.BlockProcessor
 	networkServer  *NetworkServer
 	votes         map[string][]*types.Vote
+	savedLeaderBlock *types.Block
 }
 
 // NewConsensusEngine creates a new consensus engine
@@ -327,6 +317,39 @@ func (ce *ConsensusEngine) HandleBlock(block *types.Block) error {
 func (ce *ConsensusEngine) HandleVote(vote *types.Vote) error {
 	ce.mu.Lock()
 	defer ce.mu.Unlock()
+
+	fmt.Printf(";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;Vote received - Block Hash: %x, Validator: %s, Wave: %d, Round: %d, Proposal ID: %x\n",
+		vote.BlockHash, vote.Validator, vote.Wave, vote.Round, vote.ProposalID)
+
+	// Validate vote
+	if vote == nil {
+		return fmt.Errorf("vote is nil")
+	}
+
+	// Try to get block from DAG
+	_, err := ce.dag.GetBlock(vote.BlockHash)
+	if err != nil {
+		// If block not found and we have block data in vote, save it to DAG
+		if vote.Block != nil {
+			ce.logger.Printf("Block not found in DAG, saving block from vote data")
+			if err := ce.dag.AddBlock(vote.Block); err != nil {
+				return fmt.Errorf("failed to save block from vote: %v", err)
+			}
+		} else {
+			return fmt.Errorf("failed to get block from DAG and no block data in vote: %v", err)
+		}
+	}
+
+	// Add vote to our vote map
+	ce.votes[string(vote.BlockHash)] = append(ce.votes[string(vote.BlockHash)], vote)
+
+	// Count unique validators who voted for this block
+	validatorVotes := make(map[types.Address]bool)
+	for _, v := range ce.votes[string(vote.BlockHash)] {
+		validatorVotes[v.Validator] = true
+	}
+
+	ce.logger.Printf("Updated vote count for block %x to %d", vote.BlockHash, len(validatorVotes))
 
 	if !ce.running || ce.currentWave == nil {
 		return ErrNoActiveWave
@@ -781,6 +804,13 @@ func (ce *ConsensusEngine) HandleProposal(proposal *types.Proposal) error {
 		return fmt.Errorf("invalid proposal: %v", err)
 	}
 
+	// Check if proposer is the current wave leader
+	if ce.isWaveLeader(types.Address(proposal.Proposer)) {
+		// Save the block from wave leader
+		ce.savedLeaderBlock = proposal.Block
+		ce.logger.Printf("Saved block from wave leader %s", string(proposal.Proposer))
+	}
+
 	// Store proposal
 	ce.proposals[string(proposal.BlockHash)] = proposal
 
@@ -1187,4 +1217,15 @@ func (ce *ConsensusEngine) GetBlockVotes(blockHash types.Hash) int {
 	}
 
 	return len(validatorVotes)
+}
+
+func (ce *ConsensusEngine) isWaveLeader(validator types.Address) bool {
+	return ce.currentLeader == validator
+}
+
+// GetSavedLeaderBlock returns the saved leader block
+func (ce *ConsensusEngine) GetSavedLeaderBlock() *types.Block {
+	ce.mu.RLock()
+	defer ce.mu.RUnlock()
+	return ce.savedLeaderBlock
 } 

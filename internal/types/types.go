@@ -134,12 +134,13 @@ type Proposal struct {
 
 // Vote represents a consensus vote
 type Vote struct {
-	ProposalID Hash
 	BlockHash  Hash
-	Validator  Address
 	Round      Round
 	Wave       Wave
+	Validator  Address
 	Timestamp  time.Time
+	ProposalID Hash
+	Block      *Block
 	Type       VoteType
 	Signature  Signature
 }
