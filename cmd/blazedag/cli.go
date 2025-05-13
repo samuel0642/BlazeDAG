@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -386,7 +387,14 @@ func (c *CLI) run() error {
 			continue
 		}
 
-		cmd = c.scanner.Text()
+		input := c.scanner.Text()
+		parts := strings.Fields(input)
+		if len(parts) == 0 {
+			continue
+		}
+
+		cmd = parts[0]
+		args := parts[1:]
 
 		// Handle command
 		switch cmd {
@@ -403,7 +411,9 @@ func (c *CLI) run() error {
 		case "block":
 			c.handleBlock()
 		case "send":
-			c.handleSend()
+			if err := c.handleSend(args); err != nil {
+				c.logger.Printf("Error: %v", err)
+			}
 		case "showblocks":
 			c.showBlocks()
 		case "exit":
@@ -486,8 +496,20 @@ func (c *CLI) handleBlocks() error {
 		return nil
 	}
 
-	fmt.Printf("Recent blocks (showing %d):\n", len(blocks))
+	// Use a map to track unique block hashes
+	seenBlocks := make(map[string]bool)
+	uniqueBlocks := make([]*types.Block, 0)
+
 	for _, block := range blocks {
+		blockHash := fmt.Sprintf("%x", block.ComputeHash())
+		if !seenBlocks[blockHash] {
+			seenBlocks[blockHash] = true
+			uniqueBlocks = append(uniqueBlocks, block)
+		}
+	}
+
+	fmt.Printf("Recent blocks (showing %d):\n", len(uniqueBlocks))
+	for _, block := range uniqueBlocks {
 		blockHash := block.ComputeHash()
 		isApproved := c.approvedBlocks[string(blockHash)]
 		votes := c.consensusEngine.GetBlockVotes(blockHash)
@@ -531,14 +553,14 @@ func (c *CLI) handleBlock() error {
 }
 
 // handleSend handles the send command
-func (c *CLI) handleSend() error {
-	if !c.consensusEngine.IsLeader() {
-		return fmt.Errorf("only the leader can send transactions")
+func (c *CLI) handleSend(args []string) error {
+	if len(args) != 3 {
+		return fmt.Errorf("usage: send <from> <to> <amount>")
 	}
 
-	from := types.Address(c.config.NodeID)
-	to := types.Address(c.config.NodeID)
-	amount, err := strconv.ParseUint(c.config.NodeID, 10, 64)
+	from := types.Address(args[0])
+	to := types.Address(args[1])
+	amount, err := strconv.ParseUint(args[2], 10, 64)
 	if err != nil {
 		return fmt.Errorf("invalid amount: %v", err)
 	}
@@ -551,10 +573,23 @@ func (c *CLI) handleSend() error {
 		GasLimit:  21000,
 		GasPrice:  1,
 		Data:      nil,
+		Timestamp: time.Now(),
 	}
 
 	c.blockProcessor.AddTransaction(tx)
-	fmt.Println("Transaction added to mempool")
+
+	// Print detailed transaction information
+	fmt.Printf("\nTransaction Details:\n")
+	fmt.Printf("  Hash: %x\n", tx.GetHash())
+	fmt.Printf("  From: %s\n", tx.From)
+	fmt.Printf("  To: %s\n", tx.To)
+	fmt.Printf("  Value: %d\n", tx.Value)
+	fmt.Printf("  Nonce: %d\n", tx.Nonce)
+	fmt.Printf("  Gas Limit: %d\n", tx.GasLimit)
+	fmt.Printf("  Gas Price: %d\n", tx.GasPrice)
+	fmt.Printf("  Timestamp: %s\n", tx.Timestamp.Format(time.RFC3339))
+	fmt.Printf("  Data: %v\n", tx.Data)
+	fmt.Printf("\nTransaction added to mempool successfully!\n")
 	return nil
 }
 

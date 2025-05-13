@@ -7,6 +7,7 @@ import (
 	// "encoding/gob"
 	"encoding/json"
 	// "fmt"
+	"encoding/binary"
 )
 
 func mustJSON(v interface{}) string {
@@ -39,7 +40,23 @@ func (b *Block) GetLatestBlock() *Block {
 
 // ComputeHash returns the hash of the transaction
 func (t *Transaction) ComputeHash() Hash {
-	data, _ := json.Marshal(t)
+	// Create a deterministic byte slice for hashing
+	data := make([]byte, 0)
+	data = append(data, []byte(t.From)...)
+	data = append(data, []byte(t.To)...)
+	data = append(data, uint64ToBytes(uint64(t.Nonce))...)
+	data = append(data, uint64ToBytes(uint64(t.Value))...)
+	data = append(data, uint64ToBytes(t.GasLimit)...)
+	data = append(data, uint64ToBytes(t.GasPrice)...)
+	data = append(data, t.Data...)
+	
+	// Add timestamp as bytes
+	timestampBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(timestampBytes, uint64(t.Timestamp.UnixNano()))
+	data = append(data, timestampBytes...)
+
+	// Compute SHA-256 hash
 	hash := sha256.Sum256(data)
+	t.hash = hash[:]
 	return hash[:]
 } 

@@ -318,6 +318,10 @@ func (ce *ConsensusEngine) HandleVote(vote *types.Vote) error {
 	ce.mu.Lock()
 	defer ce.mu.Unlock()
 
+	if !ce.running || ce.currentWave == nil {
+		return ErrNoActiveWave
+	}
+
 	fmt.Printf(";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;Vote received - Block Hash: %x, Validator: %s, Wave: %d, Round: %d, Proposal ID: %x\n",
 		vote.BlockHash, vote.Validator, vote.Wave, vote.Round, vote.ProposalID)
 
@@ -351,16 +355,10 @@ func (ce *ConsensusEngine) HandleVote(vote *types.Vote) error {
 
 	ce.logger.Printf("Updated vote count for block %x to %d", vote.BlockHash, len(validatorVotes))
 
-	if !ce.running || ce.currentWave == nil {
-		return ErrNoActiveWave
-	}
-
-	ce.logger.Printf("Processing vote for block %s from validator %s in wave %d, round %d",
-		vote.BlockHash, vote.Validator, vote.Wave, vote.Round)
-
 	// Add vote to wave state
 	if err := ce.currentWave.AddProposalVote(vote); err != nil {
-		return fmt.Errorf("failed to add vote: %v", err)
+		ce.logger.Printf("Warning: Failed to add vote to wave state: %v", err)
+		// Continue processing even if wave state update fails
 	}
 
 	// Check for quorum
@@ -582,11 +580,21 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 		return nil, errors.New("engine is not running")
 	}
 
+	// Check if we already created a block in this wave
+	currentWave := ce.currentWave.GetWaveNumber()
+	recentBlocks := ce.dag.GetRecentBlocks(10)
+	for _, block := range recentBlocks {
+		if block.Header.Wave == currentWave && block.Header.Validator == ce.nodeID {
+			ce.logger.Printf("Already created block in wave %d, skipping", currentWave)
+			return nil, nil
+		}
+	}
+
 	ce.logger.Printf("Creating new block in wave %d, round %d", 
-		ce.currentWave.GetWaveNumber(), ce.currentRound)
+		currentWave, ce.currentRound)
 
 	// Use BlockProcessor to create block, passing the current wave
-	block, err := ce.blockProcessor.CreateBlock(ce.currentRound, ce.currentWave.GetWaveNumber())
+	block, err := ce.blockProcessor.CreateBlock(ce.currentRound, currentWave)
 	if err != nil {
 		ce.logger.Printf("Failed to create block: %v", err)
 		return nil, err
@@ -598,8 +606,8 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 		return nil, err
 	}
 
-	// ce.logger.Printf("Created block %s in wave %d, round %d", 
-	// 	block.ComputeHash(), ce.currentWave.GetWaveNumber(), ce.currentRound)
+	ce.logger.Printf("Created block %s in wave %d, round %d", 
+		block.ComputeHash(), currentWave, ce.currentRound)
 	return block, nil
 }
 
@@ -678,6 +686,12 @@ func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
 		return errors.New("engine is not running")
 	}
 
+	// Check if block is nil
+	if block == nil {
+		ce.logger.Printf("Cannot broadcast nil block")
+		return nil
+	}
+
 	// Sign the block
 	if err := ce.signBlock(block); err != nil {
 		return fmt.Errorf("failed to sign block: %v", err)
@@ -690,7 +704,7 @@ func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
 	proposal := &types.Proposal{
 		ID:        blockHash,
 		BlockHash: blockHash,
-		Block:     block, // Include the full block
+		Block:     block,
 		Proposer:  ce.nodeID,
 		Timestamp: time.Now(),
 		Wave:      block.Header.Wave,
@@ -700,19 +714,9 @@ func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
 	// Store the proposal
 	ce.proposals[string(blockHash)] = proposal
 
-	// Add block to DAG
-	// if err := ce.dag.AddBlock(block); err != nil {
-	// 	if err.Error() != "block already exists" {
-	// 		return fmt.Errorf("failed to add block to DAG: %v", err)
-	// 	}
-	// 	// Block already exists, which is fine
-	// 	ce.logger.Printf("Block already exists in DAG: %x", blockHash)
-	// }
-
 	// Broadcast to all validators
 	for _, validator := range ce.validators {
 		if validator != ce.nodeID { // Don't send to self
-			// Get validator's address from config
 			validatorAddr := ce.getValidatorAddress(validator)
 			if validatorAddr == "" {
 				ce.logger.Printf("Warning: No address found for validator %s", validator)

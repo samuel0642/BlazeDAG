@@ -1,6 +1,8 @@
 package types
 
 import (
+	// "crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"time"
 )
@@ -73,6 +75,23 @@ type Transaction struct {
 	GasPrice  uint64
 	Data      []byte
 	Signature Signature
+	Timestamp time.Time
+	hash      []byte // cached hash
+}
+
+// GetHash returns the transaction hash
+func (tx *Transaction) GetHash() Hash {
+	if tx.hash == nil {
+		return tx.ComputeHash()
+	}
+	return tx.hash
+}
+
+// uint64ToBytes converts a uint64 to a byte slice
+func uint64ToBytes(n uint64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, n)
+	return b
 }
 
 // Receipt represents a transaction receipt

@@ -121,7 +121,7 @@ func (p *Pool) AddTransaction(tx *types.Transaction) error {
 		return err
 	}
 
-	txHash := string(tx.Hash())
+	txHash := string(tx.GetHash())
 	if _, exists := p.txs[txHash]; exists {
 		return ErrDuplicateTx
 	}
@@ -248,7 +248,7 @@ func (p *Pool) ProcessTransaction(tx *types.Transaction) (*types.TransactionResu
 	// Create transaction result
 	result := &types.TransactionResult{
 		Success:          true,
-		TransactionHash:  tx.Hash(),
+		TransactionHash:  tx.GetHash(),
 		GasUsed:         tx.GasLimit,
 		SenderBalance:    sender.Balance,
 		RecipientBalance: recipient.Balance,
