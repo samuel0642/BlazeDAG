@@ -1098,6 +1098,39 @@ func (ce *ConsensusEngine) processBlock(block *types.Block) error {
 		return fmt.Errorf("block verification failed: %v", err)
 	}
 
+	// Log block details
+	ce.logger.Printf("aaaaaaaaaaaaaaaaaaaaProcessing block: Hash=%x, Height=%d, Wave=%d, Round=%d, Validator=%s",
+		block.ComputeHash(), block.Header.Height, block.Header.Wave, block.Header.Round, block.Header.Signature.Validator)
+
+	// Log transaction details
+	for i, tx := range block.Body.Transactions {
+		ce.logger.Printf("aaaaaaaaaaaaaaaaaaaaaaaaaaTransaction %d: From=%s, To=%s, Value=%d, Nonce=%d",
+			i, string(tx.From), string(tx.To), tx.Value, tx.Nonce)
+	}
+
+	existingTxs := ce.blockProcessor.GetMempoolTransactions()
+	existingTxMap := make(map[string]*types.Transaction)
+	for _, tx := range existingTxs {
+		existingTxMap[string(tx.GetHash())] = tx
+	}
+
+	// Save transactions from block back to mempool
+	for _, tx := range block.Body.Transactions {
+		txHash := string(tx.GetHash())
+		if existingTx, exists := existingTxMap[txHash]; !exists {
+			// Set transaction state to Pending
+			tx.State = types.TransactionStatePending
+			ce.blockProcessor.AddTransaction(tx)
+			ce.logger.Printf("Added transaction from block back to mempool - Hash: %x", tx.GetHash())
+		} else {
+			// Update existing transaction state if needed
+			if existingTx.State != types.TransactionStatePending {
+				existingTx.State = types.TransactionStatePending
+				ce.logger.Printf("Updated transaction state in mempool - Hash: %x", tx.GetHash())
+			}
+		}
+	}
+
 	// Add block to DAG
 	if err := ce.dag.AddBlock(block); err != nil {
 		return fmt.Errorf("failed to add block to DAG: %v", err)
