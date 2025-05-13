@@ -30,9 +30,16 @@ func NewMempool() *Mempool {
 func (mp *Mempool) AddTransaction(tx *types.Transaction) {
 	mp.mu.Lock()
 	defer mp.mu.Unlock()
-	mp.transactions[string(tx.From)] = tx
-	log.Printf("Added transaction to mempool - From: %x, To: %x, Value: %d, Nonce: %d", 
-		tx.From, tx.To, tx.Value, tx.Nonce)
+	
+	// Set timestamp if not set
+	if tx.Timestamp.IsZero() {
+		tx.Timestamp = time.Now()
+	}
+	
+	txHash := string(tx.GetHash())
+	mp.transactions[txHash] = tx
+	log.Printf("Added transaction to mempool - Hash: %x, From: %x, To: %x, Value: %d, Nonce: %d", 
+		tx.GetHash(), tx.From, tx.To, tx.Value, tx.Nonce)
 }
 
 // GetTransactions returns all transactions in the mempool
@@ -52,9 +59,10 @@ func (mp *Mempool) RemoveTransactions(txs []*types.Transaction) {
 	mp.mu.Lock()
 	defer mp.mu.Unlock()
 	for _, tx := range txs {
-		delete(mp.transactions, string(tx.From))
-		log.Printf("Removed transaction from mempool - From: %x, To: %x, Value: %d, Nonce: %d", 
-			tx.From, tx.To, tx.Value, tx.Nonce)
+		txHash := string(tx.GetHash())
+		delete(mp.transactions, txHash)
+		log.Printf("Removed transaction from mempool - Hash: %x, From: %x, To: %x, Value: %d, Nonce: %d", 
+			tx.GetHash(), tx.From, tx.To, tx.Value, tx.Nonce)
 	}
 }
 
