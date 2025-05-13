@@ -27,7 +27,7 @@ type CLI struct {
 	stateManager    *state.StateManager
 	blockProcessor  *core.BlockProcessor
 	consensusEngine *consensus.ConsensusEngine
-	consensus       *consensus.Consensus
+	// consensus       *consensus.Consensus
 	logger          *log.Logger
 	scanner         *bufio.Scanner
 	stopChan        chan struct{}
@@ -372,7 +372,7 @@ func (c *CLI) initialize() error {
 	c.consensusEngine = consensus.NewConsensusEngine(c.config, c.stateManager, c.blockProcessor)
 
 	// Initialize consensus
-	c.consensus = consensus.NewConsensus(c.config, initialState, storage)
+	// c.consensus = consensus.NewConsensus(c.config, initialState, storage)
 
 	return nil
 }

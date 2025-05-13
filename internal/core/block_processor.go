@@ -190,26 +190,59 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 	bp.mu.Lock()
 	defer bp.mu.Unlock()
 
-	// Get transactions from mempool
-	txs := bp.mempool.GetTransactions()
-	log.Printf("Creating new block with %d transactions for round %d", len(txs), round)
+	// Print all transactions in mempool with their states
+	log.Printf("\n=== Current Mempool State ===")
+	allTxs := bp.mempool.GetTransactions()
+	log.Printf("Total transactions in mempool: %d", len(allTxs))
+	for _, tx := range allTxs {
+		stateStr := "Unknown"
+		switch tx.State {
+		case types.TransactionStatePending:
+			stateStr = "Pending"
+		case types.TransactionStateIncluded:
+			stateStr = "Included"
+		case types.TransactionStateCommitted:
+			stateStr = "Committed"
+		}
+		log.Printf("Transaction: %x", tx.GetHash())
+		log.Printf("  From: %s", tx.From)
+		log.Printf("  To: %s", tx.To)
+		log.Printf("  Value: %d", tx.Value)
+		log.Printf("  Nonce: %d", tx.Nonce)
+		log.Printf("  State: %s", stateStr)
+		log.Printf("  Timestamp: %s", tx.Timestamp.Format(time.RFC3339))
+		log.Printf("---")
+	}
+	log.Printf("=== End Mempool State ===\n")
+	
+	// Filter only pending transactions
+	pendingTxs := make([]*types.Transaction, 0)
+	for _, tx := range allTxs {
+		if tx.State == types.TransactionStatePending {
+			pendingTxs = append(pendingTxs, tx)
+		}
+	}
+	
+	log.Printf("Creating new block with %d pending transactions for round %d", len(pendingTxs), round)
+
+	// Set initial state for transactions
+	for _, tx := range pendingTxs {
+		tx.State = types.TransactionStateIncluded
+	}
 
 	// Find all blocks from the previous wave (currentWave-1)
 	prevWave := currentWave - 1
 	prevWaveBlocks := make([]*types.Block, 0)
-	allBlocks := bp.dag.GetRecentBlocks(10) // You may need to implement this if not present
+	allBlocks := bp.dag.GetRecentBlocks(10)
 	
 	for _, block := range allBlocks {
 		if block.Header.Wave == prevWave {
 			prevWaveBlocks = append(prevWaveBlocks, block)
 		}
 	}
-	// log.Printf("pppppppppppppppppppppppppppppppppppppppAll blocks: %d, prevWave: %d, prevWaveBlocks: %d", len(allBlocks), prevWave, len(prevWaveBlocks))
-
 
 	references := make([]*types.Reference, 0, len(prevWaveBlocks))
 	for _, block := range prevWaveBlocks {
-		// Reference all blocks from the previous wave
 		references = append(references, &types.Reference{
 			BlockHash: block.ComputeHash(),
 			Round:     block.Header.Round,
@@ -227,13 +260,13 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 		Height:     types.BlockNumber(bp.getNextHeight()),
 		ParentHash: bp.getParentHash(),
 		References: references,
-		StateRoot:  bp.calculateStateRoot(txs),
+		StateRoot:  bp.calculateStateRoot(pendingTxs),
 		Validator:  bp.config.NodeID,
 	}
 
 	// Create block body
 	body := &types.BlockBody{
-		Transactions: txs,
+		Transactions: pendingTxs,
 		Receipts:     make([]*types.Receipt, 0),
 		Events:       make([]*types.Event, 0),
 	}
@@ -259,9 +292,15 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 		log.Printf("Warning: Failed to add block to DAG: %v", err)
 	}
 
-	// Remove processed transactions from mempool
-	bp.mempool.RemoveTransactions(txs)
-	log.Printf("Block created successfully with %d transactions and %d references", len(txs), len(references))
+	// Update transaction states in mempool instead of removing them
+	for _, tx := range pendingTxs {
+		txHash := string(tx.GetHash())
+		if existingTx, exists := bp.mempool.transactions[txHash]; exists {
+			existingTx.State = types.TransactionStateIncluded
+		}
+	}
+
+	log.Printf("Block created successfully with %d transactions and %d references", len(pendingTxs), len(references))
 	log.Printf("Block details:")
 	log.Printf("  Hash: %x", block.ComputeHash())
 	log.Printf("  Height: %d", block.Header.Height)
@@ -271,6 +310,7 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 	log.Printf("  Parent Hash: %x", block.Header.ParentHash)
 	log.Printf("  References: %d", len(block.Header.References))
 	log.Printf("  Transactions: %d", len(block.Body.Transactions))
+	
 	return block, nil
 }
 
@@ -404,4 +444,48 @@ func (bp *BlockProcessor) VerifyCertificate(cert *types.Certificate) error {
 // GetState returns the current state
 func (bp *BlockProcessor) GetState() *types.State {
 	return bp.stateManager.GetState()
+}
+
+// UpdateTransactionStates updates the state of transactions based on vote counts
+func (bp *BlockProcessor) UpdateTransactionStates(block *types.Block, voteCount int, quorumSize int) {
+	bp.mu.Lock()
+	defer bp.mu.Unlock()
+
+	// If we have enough votes, mark transactions as committed
+	if voteCount >= quorumSize {
+		for _, tx := range block.Body.Transactions {
+			tx.State = types.TransactionStateCommitted
+		}
+	}
+}
+
+// GetMempoolTransactions returns all transactions in the mempool with their states
+func (bp *BlockProcessor) GetMempoolTransactions() []*types.Transaction {
+	bp.mu.RLock()
+	defer bp.mu.RUnlock()
+
+	txs := bp.mempool.GetTransactions()
+	log.Printf("\n=== Mempool Transactions ===")
+	log.Printf("Total transactions: %d", len(txs))
+	for _, tx := range txs {
+		stateStr := "Unknown"
+		switch tx.State {
+		case types.TransactionStatePending:
+			stateStr = "Pending"
+		case types.TransactionStateIncluded:
+			stateStr = "Included"
+		case types.TransactionStateCommitted:
+			stateStr = "Committed"
+		}
+		log.Printf("Transaction: %x", tx.GetHash())
+		log.Printf("  From: %s", tx.From)
+		log.Printf("  To: %s", tx.To)
+		log.Printf("  Value: %d", tx.Value)
+		log.Printf("  Nonce: %d", tx.Nonce)
+		log.Printf("  State: %s", stateStr)
+		log.Printf("  Timestamp: %s", tx.Timestamp.Format(time.RFC3339))
+		log.Printf("---")
+	}
+	log.Printf("=== End Mempool Transactions ===\n")
+	return txs
 } 

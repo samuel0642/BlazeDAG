@@ -65,6 +65,15 @@ type Reference struct {
 	Type      ReferenceType
 }
 
+// TransactionState represents the state of a transaction
+type TransactionState uint8
+
+const (
+	TransactionStatePending TransactionState = iota
+	TransactionStateIncluded
+	TransactionStateCommitted
+)
+
 // Transaction represents a transaction
 type Transaction struct {
 	Nonce     Nonce
@@ -76,6 +85,7 @@ type Transaction struct {
 	Data      []byte
 	Signature Signature
 	Timestamp time.Time
+	State     TransactionState
 	hash      []byte // cached hash
 }
 
