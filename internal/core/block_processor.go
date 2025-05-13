@@ -9,61 +9,135 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"log"
+	"runtime"
 
 	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
-// Mempool stores pending transactions
+// Mempool stores pending transactions with parallel processing
 type Mempool struct {
 	transactions map[string]*types.Transaction
 	mu           sync.RWMutex
+	workers      int
+	workChan     chan *types.Transaction
+	doneChan     chan bool
 }
 
-// NewMempool creates a new mempool
+// NewMempool creates a new mempool with parallel processing
 func NewMempool() *Mempool {
-	return &Mempool{
+	workers := runtime.NumCPU()
+	mp := &Mempool{
 		transactions: make(map[string]*types.Transaction),
+		workers:      workers,
+		workChan:     make(chan *types.Transaction, 1000), // Buffer size of 1000
+		doneChan:     make(chan bool),
+	}
+
+	// Start worker pool
+	for i := 0; i < workers; i++ {
+		go mp.worker()
+	}
+
+	return mp
+}
+
+// worker processes transactions in parallel
+func (mp *Mempool) worker() {
+	for {
+		select {
+		case tx := <-mp.workChan:
+			mp.mu.Lock()
+			// Set timestamp if not set
+			if tx.Timestamp.IsZero() {
+				tx.Timestamp = time.Now()
+			}
+			
+			txHash := string(tx.GetHash())
+			mp.transactions[txHash] = tx
+			mp.mu.Unlock()
+			
+			log.Printf("Added transaction to mempool - Hash: %x, From: %x, To: %x, Value: %d, Nonce: %d", 
+				tx.GetHash(), tx.From, tx.To, tx.Value, tx.Nonce)
+		case <-mp.doneChan:
+			return
+		}
 	}
 }
 
-// AddTransaction adds a transaction to the mempool
+// AddTransaction adds a transaction to the mempool using parallel processing
 func (mp *Mempool) AddTransaction(tx *types.Transaction) {
-	mp.mu.Lock()
-	defer mp.mu.Unlock()
-	
-	// Set timestamp if not set
-	if tx.Timestamp.IsZero() {
-		tx.Timestamp = time.Now()
-	}
-	
-	txHash := string(tx.GetHash())
-	mp.transactions[txHash] = tx
-	log.Printf("Added transaction to mempool - Hash: %x, From: %x, To: %x, Value: %d, Nonce: %d", 
-		tx.GetHash(), tx.From, tx.To, tx.Value, tx.Nonce)
+	mp.workChan <- tx
 }
 
 // GetTransactions returns all transactions in the mempool
 func (mp *Mempool) GetTransactions() []*types.Transaction {
 	mp.mu.RLock()
 	defer mp.mu.RUnlock()
+	
+	// Create a slice to store transactions
 	txs := make([]*types.Transaction, 0, len(mp.transactions))
-	for _, tx := range mp.transactions {
-		txs = append(txs, tx)
+	
+	// Use a wait group to process transactions in parallel
+	var wg sync.WaitGroup
+	txChan := make(chan *types.Transaction, len(mp.transactions))
+	
+	// Start workers to process transactions
+	for i := 0; i < mp.workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for tx := range txChan {
+				txs = append(txs, tx)
+			}
+		}()
 	}
+	
+	// Send transactions to workers
+	for _, tx := range mp.transactions {
+		txChan <- tx
+	}
+	close(txChan)
+	
+	// Wait for all workers to finish
+	wg.Wait()
+	
 	log.Printf("Retrieved %d transactions from mempool", len(txs))
 	return txs
 }
 
-// RemoveTransactions removes transactions from the mempool
+// RemoveTransactions removes transactions from the mempool in parallel
 func (mp *Mempool) RemoveTransactions(txs []*types.Transaction) {
 	mp.mu.Lock()
 	defer mp.mu.Unlock()
+	
+	// Create a wait group for parallel processing
+	var wg sync.WaitGroup
+	semaphore := make(chan struct{}, mp.workers)
+	
 	for _, tx := range txs {
-		txHash := string(tx.GetHash())
-		delete(mp.transactions, txHash)
-		log.Printf("Removed transaction from mempool - Hash: %x, From: %x, To: %x, Value: %d, Nonce: %d", 
-			tx.GetHash(), tx.From, tx.To, tx.Value, tx.Nonce)
+		wg.Add(1)
+		go func(tx *types.Transaction) {
+			defer wg.Done()
+			semaphore <- struct{}{} // Acquire semaphore
+			defer func() { <-semaphore }() // Release semaphore
+			
+			txHash := string(tx.GetHash())
+			delete(mp.transactions, txHash)
+			log.Printf("Removed transaction from mempool - Hash: %x, From: %x, To: %x, Value: %d, Nonce: %d", 
+				tx.GetHash(), tx.From, tx.To, tx.Value, tx.Nonce)
+		}(tx)
 	}
+	
+	wg.Wait()
+}
+
+// Stop stops the mempool workers
+func (mp *Mempool) Stop() {
+	for i := 0; i < mp.workers; i++ {
+		mp.doneChan <- true
+	}
+	close(mp.workChan)
+	close(mp.doneChan)
 }
 
 // BlockProcessor handles block processing
