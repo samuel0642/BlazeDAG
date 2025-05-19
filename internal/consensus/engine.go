@@ -195,6 +195,11 @@ func (ce *ConsensusEngine) Start() error {
 		ce.currentWave = NewWaveState(types.Wave(state.CurrentWave), ce.config.WaveTimeout, ce.config.QuorumSize)
 		ce.currentRound = types.Round(state.CurrentRound)
 
+		// Log initial wave
+		fmt.Printf("\n====================================\n")
+		fmt.Printf("======== STARTING WITH WAVE %d ========\n", ce.currentWave.GetWaveNumber())
+		fmt.Printf("====================================\n\n")
+
 		// Only set height if we have a latest block
 		if state.LatestBlock != nil {
 			ce.currentHeight = state.LatestBlock.Header.Height
@@ -271,6 +276,13 @@ func (ce *ConsensusEngine) waveTimer() {
 				oldWave := ce.currentWave.GetWaveNumber()
 				ce.currentWave = NewWaveState(ce.currentWave.GetWaveNumber()+1, ce.config.WaveTimeout, ce.config.QuorumSize)
 				ce.selectLeader()
+
+				// Add prominent wave transition logging
+				fmt.Printf("\n====================================\n")
+				fmt.Printf("======== WAVE %d ENDED ========\n", oldWave)
+				fmt.Printf("======== WAVE %d STARTED ========\n", ce.currentWave.GetWaveNumber())
+				fmt.Printf("====================================\n\n")
+
 				ce.logger.Printf("Wave forwarded from %d to %d", oldWave, ce.currentWave.GetWaveNumber())
 				lastWaveTime = time.Now()
 				lastWave = ce.currentWave.GetWaveNumber()
@@ -606,6 +618,12 @@ func (ce *ConsensusEngine) StartNewWave() error {
 	wave.Leader = ce.validators[leaderIndex]
 	ce.currentWave = wave
 
+	// Add prominent wave start logging
+	fmt.Printf("\n====================================\n")
+	fmt.Printf("======== NEW WAVE %d STARTED ========\n", wave.Number)
+	fmt.Printf("======== LEADER: %s ========\n", wave.Leader)
+	fmt.Printf("====================================\n\n")
+
 	ce.logger.Printf("Started new wave %d with leader %s",
 		wave.Number, wave.Leader)
 	return nil
@@ -629,6 +647,10 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 			return nil, nil
 		}
 	}
+
+	fmt.Printf("\n====================================\n")
+	fmt.Printf("======== CREATING BLOCK IN WAVE %d ========\n", currentWave)
+	fmt.Printf("====================================\n\n")
 
 	ce.logger.Printf("Creating new block in wave %d, round %d",
 		currentWave, ce.currentRound)
@@ -967,8 +989,16 @@ func (ce *ConsensusEngine) processVote(vote bool) {
 
 func (ce *ConsensusEngine) advanceWave() {
 	if ce.currentWave.Status != types.WaveStatusFinalized {
+		oldWave := ce.currentWave.Number
 		ce.currentWave.Number++
 		ce.currentWave.Status = types.WaveStatusProposing
+
+		// Add prominent wave advancement logging
+		fmt.Printf("\n====================================\n")
+		fmt.Printf("======== WAVE %d ADVANCED TO %d ========\n", oldWave, ce.currentWave.Number)
+		fmt.Printf("====================================\n\n")
+
+		ce.logger.Printf("Wave advanced from %d to %d", oldWave, ce.currentWave.Number)
 	}
 }
 
