@@ -15,10 +15,10 @@ import (
 	"time"
 
 	"github.com/CrossDAG/BlazeDAG/internal/consensus"
-	"github.com/CrossDAG/BlazeDAG/internal/state"
 	"github.com/CrossDAG/BlazeDAG/internal/core"
-	"github.com/CrossDAG/BlazeDAG/internal/types"
+	"github.com/CrossDAG/BlazeDAG/internal/state"
 	"github.com/CrossDAG/BlazeDAG/internal/storage"
+	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
 // CLI represents the command line interface
@@ -28,12 +28,12 @@ type CLI struct {
 	blockProcessor  *core.BlockProcessor
 	consensusEngine *consensus.ConsensusEngine
 	// consensus       *consensus.Consensus
-	logger          *log.Logger
-	scanner         *bufio.Scanner
-	stopChan        chan struct{}
-	currentRound    int
-	approvedBlocks  map[string]bool // Changed from types.Hash to string
-	savedLeaderBlock *types.Block  // Add this field to store the wave leader's block
+	logger           *log.Logger
+	scanner          *bufio.Scanner
+	stopChan         chan struct{}
+	currentRound     int
+	approvedBlocks   map[string]bool // Changed from types.Hash to string
+	savedLeaderBlock *types.Block    // Add this field to store the wave leader's block
 }
 
 // NewCLI creates a new CLI instance
@@ -59,7 +59,6 @@ func (c *CLI) Start() error {
 		return fmt.Errorf("failed to start consensus engine: %v", err)
 	}
 
-	
 	go c.runChain()
 
 	// Handle signals
@@ -82,6 +81,10 @@ func (c *CLI) runChain() {
 	height := types.BlockNumber(0)
 	lastWave := types.Wave(1) // Start from wave 1
 	blockCreatedInWave := false
+
+	// Initial delay to allow synchronization to start
+	log.Printf("Waiting for initial synchronization...")
+	time.Sleep(10 * time.Second)
 
 	// Start a goroutine to listen for incoming votes
 	go func() {
@@ -169,7 +172,7 @@ func (c *CLI) runChain() {
 					return
 				}
 
-				log.Printf("Successfully processed vote from validator %s for block %x", 
+				log.Printf("Successfully processed vote from validator %s for block %x",
 					vote.Validator, vote.BlockHash)
 			}(conn)
 		}
@@ -183,6 +186,27 @@ func (c *CLI) runChain() {
 		case <-c.stopChan:
 			return
 		default:
+			// Check DAG state every 10 rounds
+			if round%10 == 0 {
+				dag := core.GetDAG() // Get the singleton DAG
+				blocks := dag.GetRecentBlocks(20)
+
+				// Count blocks by validator
+				validatorBlocks := make(map[string]int)
+				for _, block := range blocks {
+					validator := string(block.Header.Validator)
+					validatorBlocks[validator]++
+				}
+
+				// Log blocks by validator
+				log.Printf("\n=== Current DAG State ===")
+				log.Printf("Total blocks: %d", len(blocks))
+				for validator, count := range validatorBlocks {
+					log.Printf("  Validator %s: %d blocks", validator, count)
+				}
+				log.Printf("=== End DAG State ===\n")
+			}
+
 			// Get current wave from consensus engine
 			currentWave := c.consensusEngine.GetCurrentWave()
 			// Only create block if we're in a new wave and haven't created a block yet
@@ -209,7 +233,7 @@ func (c *CLI) runChain() {
 				if c.consensusEngine.GetSavedLeaderBlock() != nil {
 					fmt.Println("jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj")
 					// Create and broadcast vote for this block
-					vote := &types.Vote{ 
+					vote := &types.Vote{
 						BlockHash: c.consensusEngine.GetSavedLeaderBlock().ComputeHash(),
 						Round:     types.Round(round),
 						Block:     c.consensusEngine.GetSavedLeaderBlock(),
@@ -249,7 +273,7 @@ func (c *CLI) runChain() {
 							votePort := strconv.Itoa(portNum + 1000)
 							voteAddr := "localhost:" + votePort
 
-							log.Printf("Broadcasting vote for block %x to validator %s at %s", 
+							log.Printf("Broadcasting vote for block %x to validator %s at %s",
 								vote.BlockHash, validator, voteAddr)
 
 							// Try to connect with retries
@@ -260,12 +284,12 @@ func (c *CLI) runChain() {
 								if err == nil {
 									break
 								}
-								log.Printf("Retry %d: Error connecting to validator %s at %s: %v", 
+								log.Printf("Retry %d: Error connecting to validator %s at %s: %v",
 									i+1, validator, voteAddr, err)
 								time.Sleep(time.Second)
 							}
 							if err != nil {
-								log.Printf("Failed to connect to validator %s after %d retries", 
+								log.Printf("Failed to connect to validator %s after %d retries",
 									validator, maxRetries)
 								continue
 							}
@@ -347,11 +371,11 @@ func (c *CLI) initialize() error {
 		BlockInterval:    1 * time.Second,
 		ConsensusTimeout: 5 * time.Second,
 		IsValidator:      true,
-		NodeID:          types.Address(c.config.NodeID),
+		NodeID:           types.Address(c.config.NodeID),
 	}
 
-	// Create DAG
-	dag := core.NewDAG()
+	// Use singleton DAG
+	dag := core.GetDAG()
 
 	// Create initial state
 	initialState := types.NewState()
@@ -508,15 +532,28 @@ func (c *CLI) handleBlocks() error {
 		}
 	}
 
-	fmt.Printf("Recent blocks (showing %d):\n", len(uniqueBlocks))
+	// Group blocks by validator for display
+	validatorBlocks := make(map[string][]*types.Block)
+	for _, block := range uniqueBlocks {
+		validator := string(block.Header.Validator)
+		validatorBlocks[validator] = append(validatorBlocks[validator], block)
+	}
+
+	// Print summary of blocks by validator
+	fmt.Println("\nBlocks summary by validator:")
+	for validator, blocks := range validatorBlocks {
+		fmt.Printf("  Validator %s: %d blocks\n", validator, len(blocks))
+	}
+
+	fmt.Printf("\nRecent blocks (showing %d):\n", len(uniqueBlocks))
 	for _, block := range uniqueBlocks {
 		blockHash := block.ComputeHash()
 		isApproved := c.approvedBlocks[string(blockHash)]
 		votes := c.consensusEngine.GetBlockVotes(blockHash)
-		
+
 		// Format the block hash as a hex string
 		hashStr := fmt.Sprintf("%x", blockHash)
-		
+
 		fmt.Printf("Height: %d, Wave: %d, Round: %d, Hash: %s, Validator: %s, Approved: %v, Votes: %d/%d\n",
 			block.Header.Height,
 			block.Header.Wave,
@@ -617,4 +654,4 @@ func (c *CLI) showBlocks() error {
 	}
 
 	return nil
-} 
+}

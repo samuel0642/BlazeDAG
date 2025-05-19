@@ -1,15 +1,16 @@
 package core
 
 import (
-	"time"
-	"sync"
-	"crypto/sha256"
-	"encoding/json"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
 	"log"
 	"runtime"
+	"sync"
+	"time"
 
 	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
@@ -51,12 +52,12 @@ func (mp *Mempool) worker() {
 			if tx.Timestamp.IsZero() {
 				tx.Timestamp = time.Now()
 			}
-			
+
 			txHash := string(tx.GetHash())
 			mp.transactions[txHash] = tx
 			mp.mu.Unlock()
-			
-			log.Printf("Added transaction to mempool - Hash: %x, From: %x, To: %x, Value: %d, Nonce: %d", 
+
+			log.Printf("Added transaction to mempool - Hash: %x, From: %x, To: %x, Value: %d, Nonce: %d",
 				tx.GetHash(), tx.From, tx.To, tx.Value, tx.Nonce)
 		case <-mp.doneChan:
 			return
@@ -73,14 +74,14 @@ func (mp *Mempool) AddTransaction(tx *types.Transaction) {
 func (mp *Mempool) GetTransactions() []*types.Transaction {
 	mp.mu.RLock()
 	defer mp.mu.RUnlock()
-	
+
 	// Create a slice to store transactions
 	txs := make([]*types.Transaction, 0, len(mp.transactions))
-	
+
 	// Use a wait group to process transactions in parallel
 	var wg sync.WaitGroup
 	txChan := make(chan *types.Transaction, len(mp.transactions))
-	
+
 	// Start workers to process transactions
 	for i := 0; i < mp.workers; i++ {
 		wg.Add(1)
@@ -91,16 +92,16 @@ func (mp *Mempool) GetTransactions() []*types.Transaction {
 			}
 		}()
 	}
-	
+
 	// Send transactions to workers
 	for _, tx := range mp.transactions {
 		txChan <- tx
 	}
 	close(txChan)
-	
+
 	// Wait for all workers to finish
 	wg.Wait()
-	
+
 	log.Printf("Retrieved %d transactions from mempool", len(txs))
 	return txs
 }
@@ -109,25 +110,25 @@ func (mp *Mempool) GetTransactions() []*types.Transaction {
 func (mp *Mempool) RemoveTransactions(txs []*types.Transaction) {
 	mp.mu.Lock()
 	defer mp.mu.Unlock()
-	
+
 	// Create a wait group for parallel processing
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, mp.workers)
-	
+
 	for _, tx := range txs {
 		wg.Add(1)
 		go func(tx *types.Transaction) {
 			defer wg.Done()
-			semaphore <- struct{}{} // Acquire semaphore
+			semaphore <- struct{}{}        // Acquire semaphore
 			defer func() { <-semaphore }() // Release semaphore
-			
+
 			txHash := string(tx.GetHash())
 			delete(mp.transactions, txHash)
-			log.Printf("Removed transaction from mempool - Hash: %x, From: %x, To: %x, Value: %d, Nonce: %d", 
+			log.Printf("Removed transaction from mempool - Hash: %x, From: %x, To: %x, Value: %d, Nonce: %d",
 				tx.GetHash(), tx.From, tx.To, tx.Value, tx.Nonce)
 		}(tx)
 	}
-	
+
 	wg.Wait()
 }
 
@@ -214,7 +215,7 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 		log.Printf("---")
 	}
 	log.Printf("=== End Mempool State ===\n")
-	
+
 	// Filter only pending transactions
 	pendingTxs := make([]*types.Transaction, 0)
 	for _, tx := range allTxs {
@@ -222,7 +223,7 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 			pendingTxs = append(pendingTxs, tx)
 		}
 	}
-	
+
 	log.Printf("Creating new block with %d pending transactions for round %d", len(pendingTxs), round)
 
 	// Set initial state for transactions
@@ -234,12 +235,37 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 	prevWave := currentWave - 1
 	prevWaveBlocks := make([]*types.Block, 0)
 	allBlocks := bp.dag.GetRecentBlocks(10)
-	
+
+	// Check existing blocks in the current wave to avoid duplicates
+	for _, block := range allBlocks {
+		if block.Header.Wave == currentWave && block.Header.Validator == bp.config.NodeID {
+			log.Printf("IMPORTANT: Validator %s already has a block in wave %d, skipping creation",
+				bp.config.NodeID, currentWave)
+			return nil, fmt.Errorf("validator already has block in current wave")
+		}
+	}
+
+	// Debug: Log all blocks in DAG to see what's being received from other validators
+	log.Printf("\n=== Current DAG State ===")
+	log.Printf("Total blocks in DAG: %d", bp.dag.GetBlockCount())
+	for i, block := range allBlocks {
+		if i >= 10 {
+			log.Printf("... and %d more blocks", len(allBlocks)-10)
+			break
+		}
+		log.Printf("Block #%d: Hash=%x, Height=%d, Wave=%d, Round=%d, Validator=%s",
+			i+1, block.ComputeHash(), block.Header.Height, block.Header.Wave,
+			block.Header.Round, block.Header.Validator)
+	}
+	log.Printf("=== End DAG State ===\n")
+
 	for _, block := range allBlocks {
 		if block.Header.Wave == prevWave {
 			prevWaveBlocks = append(prevWaveBlocks, block)
 		}
 	}
+
+	log.Printf("Found %d blocks from previous wave %d", len(prevWaveBlocks), prevWave)
 
 	references := make([]*types.Reference, 0, len(prevWaveBlocks))
 	for _, block := range prevWaveBlocks {
@@ -287,9 +313,14 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 		return nil, err
 	}
 
-	// Add block to DAG
+	// Add block to DAG, but don't error out if it's already in the DAG
+	blockHash := block.ComputeHash()
 	if err := bp.dag.AddBlock(block); err != nil {
-		log.Printf("Warning: Failed to add block to DAG: %v", err)
+		if err.Error() == "block already exists" {
+			log.Printf("Block %x already exists in DAG, continuing", blockHash)
+		} else {
+			log.Printf("Warning: Failed to add block to DAG: %v", err)
+		}
 	}
 
 	// Update transaction states in mempool instead of removing them
@@ -302,15 +333,15 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 
 	log.Printf("Block created successfully with %d transactions and %d references", len(pendingTxs), len(references))
 	log.Printf("Block details:")
-	log.Printf("  Hash: %x", block.ComputeHash())
+	log.Printf("  Hash: %x", blockHash)
 	log.Printf("  Height: %d", block.Header.Height)
-	log.Printf("  Round: %d", block.Header.Round) 
+	log.Printf("  Round: %d", block.Header.Round)
 	log.Printf("  Wave: %d", block.Header.Wave)
 	log.Printf("  Validator: %s", block.Header.Validator)
 	log.Printf("  Parent Hash: %x", block.Header.ParentHash)
 	log.Printf("  References: %d", len(block.Header.References))
 	log.Printf("  Transactions: %d", len(block.Body.Transactions))
-	
+
 	return block, nil
 }
 
@@ -388,9 +419,9 @@ func (bp *BlockProcessor) signBlock(block *types.Block) error {
 
 	// Set the signature in the block header
 	block.Header.Signature = types.Signature{
-		Validator:  bp.config.NodeID,
-		Signature:  signature,
-		Timestamp:  time.Now(),
+		Validator: bp.config.NodeID,
+		Signature: signature,
+		Timestamp: time.Now(),
 	}
 
 	return nil
@@ -488,4 +519,4 @@ func (bp *BlockProcessor) GetMempoolTransactions() []*types.Transaction {
 	}
 	log.Printf("=== End Mempool Transactions ===\n")
 	return txs
-} 
+}

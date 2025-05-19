@@ -2,13 +2,13 @@ package core
 
 import (
 	// "context"
-	"sync"
-	"time"	
-	"log"
 	"fmt"
+	"log"
+	"sync"
+	"time"
 
-	"github.com/CrossDAG/BlazeDAG/internal/types"
 	"github.com/CrossDAG/BlazeDAG/internal/storage"
+	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
 // Engine represents the core BlazeDAG engine
@@ -36,28 +36,30 @@ type Config struct {
 	BlockInterval    time.Duration
 	ConsensusTimeout time.Duration
 	IsValidator      bool
-	NodeID          types.Address
+	NodeID           types.Address
 }
 
 // NewEngine creates a new BlazeDAG engine
 func NewEngine(config *Config, storage *storage.Storage) *Engine {
 	state := types.NewState()
 	stateManager := NewStateManager(state, storage)
-	dag := NewDAG()
+
+	// Use singleton DAG instance
+	dag := GetDAG()
+
 	blockProcessor := NewBlockProcessor(config, stateManager, dag)
 	consensusEngine := NewConsensusEngine(config, stateManager)
 
 	return &Engine{
-		config:         config,
-		stateManager:   stateManager,
-		blockProcessor: blockProcessor,
+		config:          config,
+		stateManager:    stateManager,
+		blockProcessor:  blockProcessor,
 		consensusEngine: consensusEngine,
-		blockChan:      make(chan *types.Block, 100),
-		consensusChan:  make(chan *types.ConsensusMessage, 100),
-		stopChan:       make(chan struct{}),
+		blockChan:       make(chan *types.Block, 100),
+		consensusChan:   make(chan *types.ConsensusMessage, 100),
+		stopChan:        make(chan struct{}),
 	}
 }
-
 
 // Stop gracefully shuts down the engine
 func (e *Engine) Stop() {
@@ -89,7 +91,6 @@ func (e *Engine) blockCreationLoop() {
 	}
 }
 
-
 // State represents the current state of the engine
 type State struct {
 	// Block state
@@ -116,4 +117,4 @@ func NewState() *State {
 		Votes:           make(map[string][]*types.Vote),
 		ConnectedPeers:  make(map[types.Address]*types.Peer),
 	}
-} 
+}
