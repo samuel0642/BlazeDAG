@@ -6,14 +6,16 @@ import (
 	"fmt"
 	"log"
 	"net"
+
 	// "strings"
 	"sync"
 	"time"
 
+	"encoding/gob"
+
 	"github.com/CrossDAG/BlazeDAG/internal/core"
 	"github.com/CrossDAG/BlazeDAG/internal/state"
 	"github.com/CrossDAG/BlazeDAG/internal/types"
-	"encoding/gob"
 )
 
 var (
@@ -49,24 +51,24 @@ type Wave struct {
 
 // Engine represents the consensus engine
 type Engine struct {
-	config    *Config
-	proposals map[string]*types.Proposal
-	votes     map[string][]*types.Vote
-	mu        sync.RWMutex
-	logger    *log.Logger
+	config      *Config
+	proposals   map[string]*types.Proposal
+	votes       map[string][]*types.Vote
+	mu          sync.RWMutex
+	logger      *log.Logger
 	waveManager *WaveManager
-	dag       *core.DAG
+	dag         *core.DAG
 }
 
 // NewEngine creates a new consensus engine with the given configuration
 func NewEngine(config *Config) *Engine {
 	return &Engine{
-		config:    config,
-		proposals: make(map[string]*types.Proposal),
-		votes:     make(map[string][]*types.Vote),
-		logger:    log.New(log.Writer(), "[Consensus] ", log.LstdFlags),
+		config:      config,
+		proposals:   make(map[string]*types.Proposal),
+		votes:       make(map[string][]*types.Vote),
+		logger:      log.New(log.Writer(), "[Consensus] ", log.LstdFlags),
 		waveManager: NewWaveManager(nil),
-		dag:       core.NewDAG(),
+		dag:         core.GetDAG(), // Use singleton DAG
 	}
 }
 
@@ -93,25 +95,27 @@ func (e *Engine) HasQuorum() bool {
 
 // ConsensusEngine represents the consensus engine
 type ConsensusEngine struct {
-	mu            sync.RWMutex
-	running       bool
-	nodeID        types.Address
-	dag           *core.DAG
-	stateManager  *state.StateManager
-	waveManager   *WaveManager
-	currentWave   *WaveState
-	currentRound  types.Round
-	currentHeight types.BlockNumber
-	currentLeader types.Address
-	config        *Config
-	proposals     map[string]*types.Proposal
-	validators    []types.Address
-	waves         map[types.Wave]*WaveState
-	logger        *log.Logger
-	blockProcessor *core.BlockProcessor
-	networkServer  *NetworkServer
-	votes         map[string][]*types.Vote
-	savedLeaderBlock *types.Block
+	mu                sync.RWMutex
+	running           bool
+	nodeID            types.Address
+	dag               *core.DAG
+	stateManager      *state.StateManager
+	waveManager       *WaveManager
+	currentWave       *WaveState
+	currentRound      types.Round
+	currentHeight     types.BlockNumber
+	currentLeader     types.Address
+	config            *Config
+	proposals         map[string]*types.Proposal
+	validators        []types.Address
+	waves             map[types.Wave]*WaveState
+	logger            *log.Logger
+	blockProcessor    *core.BlockProcessor
+	networkServer     *NetworkServer
+	votes             map[string][]*types.Vote
+	savedLeaderBlock  *types.Block
+	blockSynchronizer *BlockSynchronizer
+	syncServer        *SyncServer
 }
 
 // NewConsensusEngine creates a new consensus engine
@@ -124,7 +128,7 @@ func NewConsensusEngine(config *Config, stateManager *state.StateManager, blockP
 		waves:          make(map[types.Wave]*WaveState),
 		logger:         log.New(log.Writer(), "[Consensus] ", log.LstdFlags),
 		votes:          make(map[string][]*types.Vote),
-		dag:            core.NewDAG(), // Initialize DAG
+		dag:            core.GetDAG(), // Use singleton DAG
 	}
 
 	// Set node ID from config
@@ -143,6 +147,30 @@ func NewConsensusEngine(config *Config, stateManager *state.StateManager, blockP
 
 	// Initialize wave manager
 	engine.waveManager = NewWaveManager(engine)
+
+	// Create block synchronizer
+	syncInterval := 5 * time.Second // Sync every 5 seconds
+	blockSynchronizer := NewBlockSynchronizer(engine, syncInterval)
+
+	// Get sync port based on validator ID
+	var syncPort int
+	switch string(engine.nodeID) {
+	case "validator1":
+		syncPort = 4000
+	case "validator2":
+		syncPort = 4001
+	case "validator3":
+		syncPort = 4002
+	default:
+		syncPort = 4000
+	}
+
+	// Initialize sync server
+	syncServer := NewSyncServer(blockSynchronizer, syncPort)
+
+	// Store references to synchronization components
+	engine.blockSynchronizer = blockSynchronizer
+	engine.syncServer = syncServer
 
 	return engine
 }
@@ -166,11 +194,11 @@ func (ce *ConsensusEngine) Start() error {
 		// Start from the last wave and round
 		ce.currentWave = NewWaveState(types.Wave(state.CurrentWave), ce.config.WaveTimeout, ce.config.QuorumSize)
 		ce.currentRound = types.Round(state.CurrentRound)
-		
+
 		// Only set height if we have a latest block
 		if state.LatestBlock != nil {
 			ce.currentHeight = state.LatestBlock.Header.Height
-			
+
 			// Load all blocks into DAG
 			blocks, err := ce.stateManager.GetAllBlocks()
 			if err != nil {
@@ -178,7 +206,11 @@ func (ce *ConsensusEngine) Start() error {
 			} else {
 				for _, block := range blocks {
 					if err := ce.dag.AddBlock(block); err != nil {
-						ce.logger.Printf("Warning: Failed to add block %s to DAG: %v", block.ComputeHash(), err)
+						if err.Error() == "block already exists" {
+							ce.logger.Printf("Block %s already exists in DAG, skipping", block.ComputeHash())
+						} else {
+							ce.logger.Printf("Warning: Failed to add block %s to DAG: %v", block.ComputeHash(), err)
+						}
 					}
 				}
 				ce.logger.Printf("Loaded %d blocks into DAG", len(blocks))
@@ -186,8 +218,8 @@ func (ce *ConsensusEngine) Start() error {
 		} else {
 			ce.currentHeight = 0
 		}
-		
-		ce.logger.Printf("Resuming from wave %d, round %d, height %d", 
+
+		ce.logger.Printf("Resuming from wave %d, round %d, height %d",
 			ce.currentWave.GetWaveNumber(), ce.currentRound, ce.currentHeight)
 	} else {
 		// Start with wave 1 if no state exists
@@ -201,13 +233,21 @@ func (ce *ConsensusEngine) Start() error {
 	ce.selectLeader()
 	ce.logger.Printf("Selected initial leader: %s", ce.currentLeader)
 
-	// Initialize network server
-	ce.networkServer = NewNetworkServer(ce)
+	// Register types for gob encoding/decoding
+	RegisterSyncTypes()
 
 	// Start network server
 	if err := ce.networkServer.Start(); err != nil {
 		return fmt.Errorf("failed to start network server: %v", err)
 	}
+
+	// Start sync server
+	if err := ce.syncServer.Start(); err != nil {
+		ce.logger.Printf("Warning: Failed to start sync server: %v", err)
+	}
+
+	// Start block synchronizer
+	ce.blockSynchronizer.Start()
 
 	// Start wave manager
 	ce.waveManager.Start()
@@ -250,7 +290,7 @@ func (ce *ConsensusEngine) selectLeader() {
 	// Select leader based on wave number
 	leaderIndex := int(ce.currentWave.GetWaveNumber()) % len(ce.validators)
 	ce.currentLeader = ce.validators[leaderIndex]
-	
+
 	// Print leader selection
 	// fmt.Printf("\n======================== Wave %d Leader Selection =========================\n", ce.currentWave.GetWaveNumber())
 	fmt.Printf("***Leader selected*** %s\n", ce.currentLeader)
@@ -268,7 +308,7 @@ func (ce *ConsensusEngine) IsLeader() bool {
 
 	isLeader := ce.currentLeader == ce.nodeID
 	if isLeader {
-		ce.logger.Printf("Node %s is leader for wave %d", 
+		ce.logger.Printf("Node %s is leader for wave %d",
 			ce.nodeID, ce.currentWave.GetWaveNumber())
 	}
 	return isLeader
@@ -293,7 +333,7 @@ func (ce *ConsensusEngine) HandleBlock(block *types.Block) error {
 		return nil
 	}
 
-	ce.logger.Printf("Processing block %s in wave %d, round %d", 
+	ce.logger.Printf("Processing block %s in wave %d, round %d",
 		block.ComputeHash(), block.Header.Wave, block.Header.Round)
 
 	// Create proposal
@@ -422,7 +462,7 @@ func (ce *ConsensusEngine) HandleCertificate(cert *types.Certificate) error {
 		return nil
 	}
 
-	ce.logger.Printf("Processing certificate for block %s in wave %d, round %d", 
+	ce.logger.Printf("Processing certificate for block %s in wave %d, round %d",
 		cert.BlockHash, cert.Wave, cert.Round)
 
 	// Validate certificate
@@ -566,7 +606,7 @@ func (ce *ConsensusEngine) StartNewWave() error {
 	wave.Leader = ce.validators[leaderIndex]
 	ce.currentWave = wave
 
-	ce.logger.Printf("Started new wave %d with leader %s", 
+	ce.logger.Printf("Started new wave %d with leader %s",
 		wave.Number, wave.Leader)
 	return nil
 }
@@ -590,7 +630,7 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 		}
 	}
 
-	ce.logger.Printf("Creating new block in wave %d, round %d", 
+	ce.logger.Printf("Creating new block in wave %d, round %d",
 		currentWave, ce.currentRound)
 
 	// Use BlockProcessor to create block, passing the current wave
@@ -606,7 +646,7 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 		return nil, err
 	}
 
-	ce.logger.Printf("Created block %s in wave %d, round %d", 
+	ce.logger.Printf("Created block %s in wave %d, round %d",
 		block.ComputeHash(), currentWave, ce.currentRound)
 	return block, nil
 }
@@ -620,7 +660,7 @@ func (ce *ConsensusEngine) ProcessVote(validator types.Address, vote bool) error
 		return fmt.Errorf("no active wave")
 	}
 
-	ce.logger.Printf("Processing vote from validator %s in wave %d", 
+	ce.logger.Printf("Processing vote from validator %s in wave %d",
 		validator, ce.currentWave.GetWaveNumber())
 
 	// Record vote
@@ -670,9 +710,9 @@ func (ce *ConsensusEngine) signBlock(block *types.Block) error {
 	// TODO: Implement proper block signing
 	// For now, just create a dummy signature
 	block.Header.Signature = types.Signature{
-		Validator:  ce.nodeID,
-		Signature:  []byte("dummy_signature"),
-		Timestamp:  time.Now(),
+		Validator: ce.nodeID,
+		Signature: []byte("dummy_signature"),
+		Timestamp: time.Now(),
 	}
 	return nil
 }
@@ -700,6 +740,11 @@ func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
 	// Compute block hash once
 	blockHash := block.ComputeHash()
 
+	// Log detailed information about the block being broadcast
+	ce.logger.Printf("Broadcasting block: Hash=%x, Height=%d, Wave=%d, Round=%d, Validator=%s, References=%d",
+		blockHash, block.Header.Height, block.Header.Wave, block.Header.Round,
+		block.Header.Validator, len(block.Header.References))
+
 	// Create proposal with the full block
 	proposal := &types.Proposal{
 		ID:        blockHash,
@@ -723,7 +768,7 @@ func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
 				continue
 			}
 
-			ce.logger.Printf("Broadcasting block %x to validator %s at %s", 
+			ce.logger.Printf("Broadcasting block %x to validator %s at %s",
 				blockHash, validator, validatorAddr)
 
 			// Create connection to validator
@@ -763,6 +808,8 @@ func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
 				ce.logger.Printf("Invalid acknowledgment from validator %s", validator)
 				continue
 			}
+
+			ce.logger.Printf("Successfully sent block to validator %s", validator)
 		}
 	}
 
@@ -803,8 +850,19 @@ func (ce *ConsensusEngine) HandleProposal(proposal *types.Proposal) error {
 		return errors.New("engine is not running")
 	}
 
+	// Enhanced logging for proposal handling
+	ce.logger.Printf("Received proposal - BlockHash: %x, Wave: %d, Round: %d, Proposer: %s",
+		proposal.BlockHash, proposal.Wave, proposal.Round, proposal.Proposer)
+
+	// Check if we already have this proposal
+	if _, exists := ce.proposals[string(proposal.BlockHash)]; exists {
+		ce.logger.Printf("Proposal already exists, skipping duplicate")
+		return nil
+	}
+
 	// Verify proposal
 	if err := ce.verifyProposal(proposal); err != nil {
+		ce.logger.Printf("Proposal verification failed: %v", err)
 		return fmt.Errorf("invalid proposal: %v", err)
 	}
 
@@ -820,11 +878,12 @@ func (ce *ConsensusEngine) HandleProposal(proposal *types.Proposal) error {
 
 	// Process block
 	if err := ce.processBlock(proposal.Block); err != nil {
+		ce.logger.Printf("Failed to process block: %v", err)
 		return fmt.Errorf("failed to process block: %v", err)
 	}
 
-	ce.logger.Printf("Processed proposal for block %s from validator %s", 
-		string(proposal.BlockHash), string(proposal.Proposer))
+	ce.logger.Printf("Successfully processed proposal for block %x from validator %s",
+		proposal.BlockHash, string(proposal.Proposer))
 
 	return nil
 }
@@ -843,6 +902,11 @@ func (ce *ConsensusEngine) verifyProposal(proposal *types.Proposal) error {
 		return fmt.Errorf("invalid proposer: %s", string(proposal.Proposer))
 	}
 
+	// Verify block exists
+	if proposal.Block == nil {
+		return fmt.Errorf("proposal has nil block")
+	}
+
 	// Verify block hash matches
 	computedHash := proposal.Block.ComputeHash()
 	if !bytes.Equal(proposal.BlockHash, computedHash) {
@@ -850,10 +914,21 @@ func (ce *ConsensusEngine) verifyProposal(proposal *types.Proposal) error {
 		return fmt.Errorf("block hash mismatch")
 	}
 
-	// Add block to DAG
-	// fmt.Println("(((((((((((((((((((((((())))))))))))))))))))))))", proposal.BlockHash)
+	// Log detailed information about the block being verified
+	ce.logger.Printf("Verifying block - Hash: %x, Height: %d, Wave: %d, Round: %d, Validator: %s, References: %d",
+		computedHash, proposal.Block.Header.Height, proposal.Block.Header.Wave,
+		proposal.Block.Header.Round, proposal.Block.Header.Validator,
+		len(proposal.Block.Header.References))
+
+	// Add block to DAG, but handle "already exists" gracefully
 	if err := ce.dag.AddBlock(proposal.Block); err != nil {
-		return fmt.Errorf("failed to add block to DAG: %v", err)
+		if err.Error() == "block already exists" {
+			ce.logger.Printf("Block %x already exists in DAG, continuing", computedHash)
+		} else {
+			return fmt.Errorf("failed to add block to DAG: %v", err)
+		}
+	} else {
+		ce.logger.Printf("Successfully added block %x to DAG", computedHash)
 	}
 
 	// Verify block signature
@@ -861,18 +936,18 @@ func (ce *ConsensusEngine) verifyProposal(proposal *types.Proposal) error {
 		return fmt.Errorf("invalid block signature: %v", err)
 	}
 
-	fmt.Println("------------------------------------PROPOSAL VERIFIED------------------------------------")
+	ce.logger.Printf("------------------------------------PROPOSAL VERIFIED------------------------------------")
 
 	return nil
 }
 
 func (ce *ConsensusEngine) createProposal() *types.Proposal {
 	return &types.Proposal{
-		Timestamp:  time.Now(),
-		Round:      ce.currentRound,
-		Wave:       ce.currentWave.GetWaveNumber(),
-		BlockHash:  ce.getParentHash(),
-		Proposer:   ce.nodeID,
+		Timestamp: time.Now(),
+		Round:     ce.currentRound,
+		Wave:      ce.currentWave.GetWaveNumber(),
+		BlockHash: ce.getParentHash(),
+		Proposer:  ce.nodeID,
 	}
 }
 
@@ -920,11 +995,11 @@ func (ce *ConsensusEngine) GetBlock(hash types.Hash) (*types.Block, error) {
 
 // NetworkServer handles incoming connections and messages
 type NetworkServer struct {
-	listener net.Listener
-	consensusEngine   *ConsensusEngine
-	running  bool
-	mu       sync.RWMutex
-	port     string
+	listener        net.Listener
+	consensusEngine *ConsensusEngine
+	running         bool
+	mu              sync.RWMutex
+	port            string
 }
 
 // initGobTypes initializes the types for gob encoding/decoding
@@ -940,7 +1015,7 @@ func initGobTypes() {
 func NewNetworkServer(engine *ConsensusEngine) *NetworkServer {
 	// Initialize gob types
 	initGobTypes()
-	
+
 	// Extract port from listen address
 	addr := string(engine.config.ListenAddr)
 	_, port, err := net.SplitHostPort(addr)
@@ -951,7 +1026,7 @@ func NewNetworkServer(engine *ConsensusEngine) *NetworkServer {
 
 	return &NetworkServer{
 		consensusEngine: engine,
-		port:   port,
+		port:            port,
 	}
 }
 
@@ -993,7 +1068,7 @@ func (ns *NetworkServer) Stop() {
 	if ns.listener != nil {
 		ns.listener.Close()
 	}
-	
+
 	ns.consensusEngine.logger.Printf("Network server stopped on port %s", ns.port)
 }
 
@@ -1042,6 +1117,17 @@ func (ns *NetworkServer) handleConnection(conn net.Conn) {
 		return
 	}
 
+	// Basic validation before passing to consensus engine
+	if proposal.Block == nil {
+		ns.consensusEngine.logger.Printf("Received proposal with nil block from %s", remoteAddr)
+		return
+	}
+
+	// Log the received proposal
+	blockHash := proposal.BlockHash
+	ns.consensusEngine.logger.Printf("Received proposal from %s - BlockHash: %x, Validator: %s, Wave: %d, Round: %d",
+		remoteAddr, blockHash, proposal.Block.Header.Validator, proposal.Wave, proposal.Round)
+
 	// Verify the proposal came from a valid validator
 	isValidValidator := false
 	for _, v := range ns.consensusEngine.validators {
@@ -1055,10 +1141,7 @@ func (ns *NetworkServer) handleConnection(conn net.Conn) {
 		return
 	}
 
-	ns.consensusEngine.logger.Printf("Received proposal for block %x from %s", 
-		proposal.BlockHash, remoteAddr)
-
-	// Instead of adding the block directly to the DAG, use HandleProposal
+	// Use HandleProposal to process the received proposal
 	if err := ns.consensusEngine.HandleProposal(&proposal); err != nil {
 		ns.consensusEngine.logger.Printf("Error handling proposal from %s: %v", remoteAddr, err)
 		return
@@ -1070,6 +1153,8 @@ func (ns *NetworkServer) handleConnection(conn net.Conn) {
 		ns.consensusEngine.logger.Printf("Error sending acknowledgment to %s: %v", remoteAddr, err)
 		return
 	}
+
+	ns.consensusEngine.logger.Printf("Successfully processed proposal from %s and sent acknowledgment", remoteAddr)
 }
 
 // Stop stops the consensus engine
@@ -1083,6 +1168,12 @@ func (ce *ConsensusEngine) Stop() {
 
 	// Stop network server
 	ce.networkServer.Stop()
+
+	// Stop sync server
+	ce.syncServer.Stop()
+
+	// Stop block synchronizer
+	ce.blockSynchronizer.Stop()
 
 	// Stop wave manager
 	ce.waveManager.Stop()
@@ -1099,13 +1190,40 @@ func (ce *ConsensusEngine) processBlock(block *types.Block) error {
 	}
 
 	// Log block details
-	ce.logger.Printf("aaaaaaaaaaaaaaaaaaaaProcessing block: Hash=%x, Height=%d, Wave=%d, Round=%d, Validator=%s",
-		block.ComputeHash(), block.Header.Height, block.Header.Wave, block.Header.Round, block.Header.Signature.Validator)
+	ce.logger.Printf("Processing block - Hash=%x, Height=%d, Wave=%d, Round=%d, Validator=%s, References=%d",
+		block.ComputeHash(), block.Header.Height, block.Header.Wave, block.Header.Round,
+		block.Header.Validator, len(block.Header.References))
 
 	// Log transaction details
 	for i, tx := range block.Body.Transactions {
-		ce.logger.Printf("aaaaaaaaaaaaaaaaaaaaaaaaaaTransaction %d: From=%s, To=%s, Value=%d, Nonce=%d",
+		ce.logger.Printf("Transaction %d: From=%s, To=%s, Value=%d, Nonce=%d",
 			i, string(tx.From), string(tx.To), tx.Value, tx.Nonce)
+	}
+
+	// Add block to DAG (if not already added in verification)
+	// This is a safeguard to ensure the block is in the DAG
+	blockHash := block.ComputeHash()
+	_, err := ce.dag.GetBlock(blockHash)
+	if err != nil {
+		// Block not found in DAG, add it
+		if err := ce.dag.AddBlock(block); err != nil {
+			if err.Error() == "block already exists" {
+				ce.logger.Printf("Block already exists in DAG during processing, continuing")
+			} else {
+				ce.logger.Printf("Failed to add block to DAG during processing: %v", err)
+				return err
+			}
+		} else {
+			ce.logger.Printf("Added block %x to DAG during processing", blockHash)
+		}
+	} else {
+		ce.logger.Printf("Block %x already exists in DAG, skipping addition", blockHash)
+	}
+
+	// Handle block from other validators
+	if block.Header.Validator != ce.nodeID {
+		ce.logger.Printf("Block is from another validator: %s, our ID: %s",
+			block.Header.Validator, ce.nodeID)
 	}
 
 	existingTxs := ce.blockProcessor.GetMempoolTransactions()
@@ -1131,18 +1249,13 @@ func (ce *ConsensusEngine) processBlock(block *types.Block) error {
 		}
 	}
 
-	// Add block to DAG
-	if err := ce.dag.AddBlock(block); err != nil {
-		return fmt.Errorf("failed to add block to DAG: %v", err)
-	}
-
 	// Update state
 	if err := ce.stateManager.CommitBlock(block); err != nil {
 		return fmt.Errorf("failed to commit block: %v", err)
 	}
 
-	ce.logger.Printf("Processed block %s at height %d", 
-		string(block.ComputeHash()), block.Header.Height)
+	ce.logger.Printf("Successfully processed block %x at height %d from validator %s",
+		blockHash, block.Header.Height, block.Header.Validator)
 	return nil
 }
 
@@ -1265,4 +1378,4 @@ func (ce *ConsensusEngine) GetSavedLeaderBlock() *types.Block {
 	ce.mu.RLock()
 	defer ce.mu.RUnlock()
 	return ce.savedLeaderBlock
-} 
+}
