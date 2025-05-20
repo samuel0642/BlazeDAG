@@ -1409,3 +1409,28 @@ func (ce *ConsensusEngine) GetSavedLeaderBlock() *types.Block {
 	defer ce.mu.RUnlock()
 	return ce.savedLeaderBlock
 }
+
+// GetNodeID returns the node ID
+func (ce *ConsensusEngine) GetNodeID() string {
+	return string(ce.nodeID)
+}
+
+// GetWaveStatus returns the current wave status
+func (ce *ConsensusEngine) GetWaveStatus() string {
+	if ce.currentWave == nil {
+		return "unknown"
+	}
+
+	switch ce.currentWave.Status {
+	case 0:
+		return "initializing"
+	case 1:
+		return "proposing"
+	case 2:
+		return "finalized"
+	case 3:
+		return "failed"
+	default:
+		return "unknown"
+	}
+}

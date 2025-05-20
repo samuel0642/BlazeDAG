@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/CrossDAG/BlazeDAG/internal/api"
 	"github.com/CrossDAG/BlazeDAG/internal/consensus"
 	"github.com/CrossDAG/BlazeDAG/internal/core"
 	"github.com/CrossDAG/BlazeDAG/internal/state"
@@ -34,6 +35,7 @@ type CLI struct {
 	currentRound     int
 	approvedBlocks   map[string]bool // Changed from types.Hash to string
 	savedLeaderBlock *types.Block    // Add this field to store the wave leader's block
+	apiServer        *api.Server
 }
 
 // NewCLI creates a new CLI instance
@@ -58,6 +60,14 @@ func (c *CLI) Start() error {
 	if err := c.consensusEngine.Start(); err != nil {
 		return fmt.Errorf("failed to start consensus engine: %v", err)
 	}
+
+	// Create and start API server
+	apiPort := 8080
+	c.apiServer = api.NewServer(c.consensusEngine, apiPort)
+	if err := c.apiServer.Start(); err != nil {
+		return fmt.Errorf("failed to start API server: %v", err)
+	}
+	c.logger.Printf("API server started on port %d", apiPort)
 
 	go c.runChain()
 
@@ -358,7 +368,14 @@ func (c *CLI) runChain() {
 // Stop stops the CLI
 func (c *CLI) Stop() {
 	close(c.stopChan)
-	// No need to stop consensus engine as it doesn't have a Stop method
+	if c.consensusEngine != nil {
+		c.consensusEngine.Stop()
+	}
+
+	// Stop API server if running
+	if c.apiServer != nil {
+		c.apiServer.Stop()
+	}
 }
 
 // initialize initializes the CLI components
@@ -461,6 +478,14 @@ func (c *CLI) printHelp() {
 	fmt.Println("  send    - Send a transaction (send <from> <to> <amount>)")
 	fmt.Println("  showblocks - Show all blocks in the chain")
 	fmt.Println("  exit    - Exit the CLI")
+	fmt.Println("\nAPI server running on port 8080 with the following endpoints:")
+	fmt.Println("  GET /status         - Show node status")
+	fmt.Println("  GET /blocks         - List recent blocks")
+	fmt.Println("  GET /blocks/{hash}  - Show block details")
+	fmt.Println("  GET /dag/stats      - Show DAG statistics")
+	fmt.Println("  GET /consensus/wave - Show current wave information")
+	fmt.Println("  GET /transactions   - List recent transactions")
+	fmt.Println("  GET /validators     - List validators")
 }
 
 // handleStatus shows the current status
@@ -468,6 +493,8 @@ func (c *CLI) handleStatus() error {
 	fmt.Printf("Current wave: %d\n", c.consensusEngine.GetCurrentWave())
 	fmt.Printf("Current round: %d\n", c.currentRound)
 	fmt.Printf("Is leader: %v\n", c.consensusEngine.IsLeader())
+	fmt.Printf("Node ID: %s\n", c.consensusEngine.GetNodeID())
+	fmt.Printf("API server: running on port 8080\n")
 	return nil
 }
 
