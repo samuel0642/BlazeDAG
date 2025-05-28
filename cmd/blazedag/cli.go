@@ -259,11 +259,9 @@ func (c *CLI) runChain() {
 							var validatorAddr string
 							switch string(validator) {
 							case "validator1":
-								validatorAddr = "localhost:3000"
+								validatorAddr = "54.183.204.244:3000"
 							case "validator2":
-								validatorAddr = "localhost:3001"
-							case "validator3":
-								validatorAddr = "localhost:3002"
+								validatorAddr = "52.53.192.236:3000"
 							default:
 								log.Printf("Warning: Unknown validator %s", validator)
 								continue
@@ -281,7 +279,13 @@ func (c *CLI) runChain() {
 								continue
 							}
 							votePort := strconv.Itoa(portNum + 1000)
-							voteAddr := "localhost:" + votePort
+							// Extract IP from validatorAddr and use it with the vote port
+							ip, _, err := net.SplitHostPort(validatorAddr)
+							if err != nil {
+								log.Printf("Error extracting IP from validator address: %v", err)
+								continue
+							}
+							voteAddr := ip + ":" + votePort
 
 							log.Printf("Broadcasting vote for block %x to validator %s at %s",
 								vote.BlockHash, validator, voteAddr)

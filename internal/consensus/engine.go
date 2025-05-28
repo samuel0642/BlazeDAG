@@ -158,9 +158,7 @@ func NewConsensusEngine(config *Config, stateManager *state.StateManager, blockP
 	case "validator1":
 		syncPort = 4000
 	case "validator2":
-		syncPort = 4001
-	case "validator3":
-		syncPort = 4002
+		syncPort = 4000
 	default:
 		syncPort = 4000
 	}
@@ -843,21 +841,15 @@ func (ce *ConsensusEngine) getValidatorAddress(validator types.Address) string {
 	// Get validator's listen address from config
 	for _, v := range ce.config.ValidatorSet {
 		if v == validator {
-			// Determine port based on validator
-			var port string
+			// Map validators to their actual IP addresses
 			switch string(validator) {
 			case "validator1":
-				port = "3000"
+				return "54.183.204.244:3000"
 			case "validator2":
-				port = "3001"
-			case "validator3":
-				port = "3002"
+				return "52.53.192.236:3000"
 			default:
 				return ""
 			}
-
-			// For local testing, use localhost
-			return fmt.Sprintf("localhost:%s", port)
 		}
 	}
 	return ""

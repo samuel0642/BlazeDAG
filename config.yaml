@@ -5,13 +5,11 @@ consensus:
   validator_set:
     - "validator1"
     - "validator2"
-    - "validator3"
   quorum_size: 2
-  listen_addr: "localhost:3000"
+  listen_addr: "0.0.0.0:3000"
   seeds:
-    - "localhost:3001"
-    - "localhost:3002"
-  total_validators: 3
+    - "52.53.192.236:3000"
+  total_validators: 2
 
 state:
   genesis_file: "genesis.json"

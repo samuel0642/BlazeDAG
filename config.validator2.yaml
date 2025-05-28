@@ -6,9 +6,9 @@ consensus:
     - "validator1"
     - "validator2"
   quorum_size: 2
-  listen_addr: "localhost:3001"
+  listen_addr: "0.0.0.0:3000"
   seeds:
-    - "localhost:3000"
+    - "54.183.204.244:3000"
   total_validators: 2
 
 state:

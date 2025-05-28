@@ -211,14 +211,12 @@ func (bs *BlockSynchronizer) syncWithValidator(validatorID types.Address, ourBlo
 
 // getValidatorSyncAddress returns the sync address for a validator
 func (bs *BlockSynchronizer) getValidatorSyncAddress(validator types.Address) string {
-	// Use the same port mapping as the consensus engine but on a different port for sync
+	// Use the same IP addresses as the consensus engine but on a different port for sync
 	switch string(validator) {
 	case "validator1":
-		return "localhost:4000" // Sync port for validator1
+		return "54.183.204.244:4000" // Sync port for validator1
 	case "validator2":
-		return "localhost:4001" // Sync port for validator2
-	case "validator3":
-		return "localhost:4002" // Sync port for validator3
+		return "52.53.192.236:4000" // Sync port for validator2
 	default:
 		return ""
 	}

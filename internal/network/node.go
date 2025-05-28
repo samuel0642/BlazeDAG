@@ -144,9 +144,6 @@ func (n *P2PNode) GetID() PeerID {
 	return n.id
 }
 
-
-
-
 // discoverPeers periodically discovers new peers
 func (n *P2PNode) discoverPeers() {
 	ticker := time.NewTicker(5 * time.Second)
@@ -162,8 +159,8 @@ func (n *P2PNode) discoverPeers() {
 				ID   PeerID
 				Addr string
 			}{
-				{PeerID("node-3000"), "localhost:3000"},
-				{PeerID("node-3001"), "localhost:3001"},
+				{PeerID("validator1"), "54.183.204.244:3000"},
+				{PeerID("validator2"), "52.53.192.236:3000"},
 			}
 
 			for _, peer := range knownPeers {
