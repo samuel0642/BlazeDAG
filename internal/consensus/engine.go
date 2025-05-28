@@ -269,21 +269,55 @@ func (ce *ConsensusEngine) waveTimer() {
 		time.Sleep(ce.config.WaveTimeout)
 		ce.mu.Lock()
 		if ce.currentWave != nil {
-			// Only increment wave if the wave timeout has elapsed and we're on the expected wave
-			if time.Since(lastWaveTime) >= ce.config.WaveTimeout && ce.currentWave.GetWaveNumber() == lastWave {
+			// IMPROVED WAVE SYNCHRONIZATION: Only advance wave if enough time has passed
+			// and we have processed blocks from the current wave
+			timeSinceLastWave := time.Since(lastWaveTime)
+			currentWaveNum := ce.currentWave.GetWaveNumber()
+
+			// Check if we should advance the wave
+			shouldAdvanceWave := false
+
+			// Advance if timeout has elapsed and we're still on the expected wave
+			if timeSinceLastWave >= ce.config.WaveTimeout && currentWaveNum == lastWave {
+				shouldAdvanceWave = true
+			}
+
+			// Also advance if we're behind (other validators have moved ahead)
+			recentBlocks := ce.dag.GetRecentBlocks(20)
+			maxWaveInDAG := currentWaveNum
+			for _, block := range recentBlocks {
+				if block.Header.Wave > maxWaveInDAG {
+					maxWaveInDAG = block.Header.Wave
+				}
+			}
+
+			// If we're more than 1 wave behind, catch up
+			if maxWaveInDAG > currentWaveNum+1 {
+				ce.logger.Printf("Catching up: current wave %d, max wave in DAG %d", currentWaveNum, maxWaveInDAG)
+				shouldAdvanceWave = true
+			}
+
+			if shouldAdvanceWave {
 				oldWave := ce.currentWave.GetWaveNumber()
-				ce.currentWave = NewWaveState(ce.currentWave.GetWaveNumber()+1, ce.config.WaveTimeout, ce.config.QuorumSize)
+				newWave := oldWave + 1
+
+				// Don't skip too far ahead
+				if maxWaveInDAG > 0 && newWave > maxWaveInDAG+1 {
+					newWave = maxWaveInDAG + 1
+				}
+
+				ce.currentWave = NewWaveState(newWave, ce.config.WaveTimeout, ce.config.QuorumSize)
 				ce.selectLeader()
 
 				// Add prominent wave transition logging
 				fmt.Printf("\n====================================\n")
 				fmt.Printf("======== WAVE %d ENDED ========\n", oldWave)
-				fmt.Printf("======== WAVE %d STARTED ========\n", ce.currentWave.GetWaveNumber())
+				fmt.Printf("======== WAVE %d STARTED ========\n", newWave)
 				fmt.Printf("====================================\n\n")
 
-				ce.logger.Printf("Wave forwarded from %d to %d", oldWave, ce.currentWave.GetWaveNumber())
+				ce.logger.Printf("Wave forwarded from %d to %d (max wave in DAG: %d)", oldWave, newWave, maxWaveInDAG)
 				lastWaveTime = time.Now()
-				lastWave = ce.currentWave.GetWaveNumber()
+				lastWave = newWave
 			}
 		}
 		ce.mu.Unlock()
@@ -641,7 +675,7 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 
 	// Check if we already created a block in this wave
 	currentWave := ce.currentWave.GetWaveNumber()
-	recentBlocks := ce.dag.GetRecentBlocks(10)
+	recentBlocks := ce.dag.GetRecentBlocks(50) // Increased from 10 to 50
 	for _, block := range recentBlocks {
 		if block.Header.Wave == currentWave && block.Header.Validator == ce.nodeID {
 			ce.logger.Printf("Already created block in wave %d, skipping", currentWave)
@@ -670,6 +704,15 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 
 	ce.mu.Lock() // Re-lock for the rest of the function
 	ce.logger.Printf("Synchronization completed, proceeding with block creation")
+
+	// Double-check after synchronization that we haven't already created a block
+	recentBlocks = ce.dag.GetRecentBlocks(50)
+	for _, block := range recentBlocks {
+		if block.Header.Wave == currentWave && block.Header.Validator == ce.nodeID {
+			ce.logger.Printf("Block already exists after synchronization in wave %d, skipping", currentWave)
+			return nil, nil
+		}
+	}
 
 	// Use BlockProcessor to create block, passing the current wave
 	block, err := ce.blockProcessor.CreateBlock(ce.currentRound, currentWave)

@@ -268,7 +268,11 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 				i, block.ComputeHash(), block.Header.Validator, block.Header.Wave)
 		}
 	} else {
-		log.Printf("No blocks found from previous wave %d to reference", prevWave)
+		if prevWave > 0 {
+			log.Printf("No blocks found from previous wave %d to reference", prevWave)
+		} else {
+			log.Printf("This is a genesis block (wave %d), no previous wave to reference", currentWave)
+		}
 	}
 
 	references := make([]*types.Reference, 0, len(prevWaveBlocks))

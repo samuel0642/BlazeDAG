@@ -62,43 +62,51 @@ func (bs *BlockSynchronizer) Stop() {
 	bs.logger.Printf("Block synchronizer stopped")
 }
 
-// syncLoop performs periodic block synchronization
+// syncLoop runs the synchronization loop
 func (bs *BlockSynchronizer) syncLoop() {
 	ticker := time.NewTicker(bs.syncInterval)
 	defer ticker.Stop()
 
-	// Initial sync after starting
-	bs.syncWithPeers()
-
 	for {
 		select {
-		case <-ticker.C:
-			bs.syncWithPeers()
 		case <-bs.stopChan:
 			return
+		case <-ticker.C:
+			if bs.running {
+				bs.syncWithPeers()
+			}
 		}
 	}
 }
 
-// syncWithPeers synchronizes blocks with all other validators
+// syncWithPeers synchronizes blocks with all peers
 func (bs *BlockSynchronizer) syncWithPeers() {
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+
+	if !bs.running {
+		return
+	}
+
 	bs.logger.Printf("Starting block synchronization with peers")
 
-	// Get all validators except ourselves
+	// Get our current blocks
+	ourBlocks := bs.dag.GetRecentBlocks(50) // Increased to get more blocks
 	ourID := bs.consensusEngine.nodeID
-	validators := bs.consensusEngine.GetValidators()
 
-	// Get our latest blocks
-	ourBlocks := bs.dag.GetRecentBlocks(50)
-
-	// Log our blocks for debugging
 	bs.logger.Printf("Our local blocks (%d):", len(ourBlocks))
 	for i, block := range ourBlocks {
-		if i < 5 { // Only log a few blocks
+		if i < 5 { // Show first 5 blocks for debugging
 			bs.logger.Printf("  Block[%d]: Hash=%x, Wave=%d, Validator=%s",
 				i, block.ComputeHash(), block.Header.Wave, block.Header.Validator)
 		}
 	}
+	if len(ourBlocks) > 5 {
+		bs.logger.Printf("  ... and %d more blocks", len(ourBlocks)-5)
+	}
+
+	// Get validators from consensus engine
+	validators := bs.consensusEngine.GetValidators()
 
 	// Create a map of our block hashes for quick lookup
 	ourBlockHashes := make(map[string]bool)
