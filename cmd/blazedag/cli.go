@@ -227,16 +227,20 @@ func (c *CLI) runChain() {
 			}
 
 			if !blockCreatedInWave {
-				// Create a block with current round number using consensus engine
-				block, err := c.consensusEngine.CreateBlock()
-				if err != nil {
-					log.Printf("Error creating block: %v", err)
-					continue
-				}
-				// Broadcast the block using consensus engine
-				if err := c.consensusEngine.BroadcastBlock(block); err != nil {
-					log.Printf("Error broadcasting block: %v", err)
-					continue
+				// FIXED: Only create block if we are the leader for this wave
+				if c.consensusEngine.IsLeader() {
+					// Create a block with current round number using consensus engine
+					block, err := c.consensusEngine.CreateBlock()
+					if err != nil {
+						log.Printf("Error creating block: %v", err)
+						continue
+					}
+					// Broadcast the block using consensus engine
+					if err := c.consensusEngine.BroadcastBlock(block); err != nil {
+						log.Printf("Error broadcasting block: %v", err)
+						continue
+					}
+					blockCreatedInWave = true
 				}
 
 				// Only proceed with voting if we have a saved leader block

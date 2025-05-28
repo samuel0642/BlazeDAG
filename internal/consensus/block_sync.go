@@ -190,8 +190,13 @@ func (bs *BlockSynchronizer) syncWithValidator(validatorID types.Address, ourBlo
 		// Skip blocks we already have
 		blockHash := block.ComputeHash()
 		if ourBlockHashes[string(blockHash)] {
+			bs.logger.Printf("Skipping block %d/%d - already have: Hash=%x, Wave=%d, Validator=%s",
+				i+1, len(syncResp.Blocks), blockHash, block.Header.Wave, block.Header.Validator)
 			continue
 		}
+
+		bs.logger.Printf("Processing new block %d/%d: Hash=%x, Wave=%d, Validator=%s",
+			i+1, len(syncResp.Blocks), blockHash, block.Header.Wave, block.Header.Validator)
 
 		// Add the block to our DAG
 		if err := bs.dag.AddBlock(block); err != nil {
@@ -201,7 +206,7 @@ func (bs *BlockSynchronizer) syncWithValidator(validatorID types.Address, ourBlo
 				bs.logger.Printf("Failed to add block %x to DAG: %v", blockHash, err)
 			}
 		} else {
-			bs.logger.Printf("Added block %d/%d to DAG: Hash=%x, Wave=%d, Validator=%s",
+			bs.logger.Printf("Successfully added block %d/%d to DAG: Hash=%x, Wave=%d, Validator=%s",
 				i+1, len(syncResp.Blocks), blockHash, block.Header.Wave, block.Header.Validator)
 		}
 	}
@@ -246,6 +251,8 @@ func (bs *BlockSynchronizer) HandleSyncRequest(req *SyncRequest, conn net.Conn) 
 		blockHash := block.ComputeHash()
 		if !knownBlocks[string(blockHash)] {
 			resp.Blocks = append(resp.Blocks, block)
+			bs.logger.Printf("Adding block to sync response: Hash=%x, Wave=%d, Validator=%s",
+				blockHash, block.Header.Wave, block.Header.Validator)
 		}
 	}
 

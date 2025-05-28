@@ -320,6 +320,9 @@ func (ce *ConsensusEngine) IsLeader() bool {
 	if isLeader {
 		ce.logger.Printf("Node %s is leader for wave %d",
 			ce.nodeID, ce.currentWave.GetWaveNumber())
+	} else {
+		ce.logger.Printf("Node %s is NOT leader for wave %d (leader is %s)",
+			ce.nodeID, ce.currentWave.GetWaveNumber(), ce.currentLeader)
 	}
 	return isLeader
 }
@@ -681,12 +684,8 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 		return nil, nil
 	}
 
-	// Add block to DAG
-	if err := ce.dag.AddBlock(block); err != nil {
-		ce.logger.Printf("Failed to add block to DAG: %v", err)
-		return nil, err
-	}
-
+	// FIXED: Don't add block to DAG again - BlockProcessor already added it
+	// The block processor already adds the block to the DAG, so we don't need to do it again
 	ce.logger.Printf("Created block %s in wave %d, round %d",
 		block.ComputeHash(), currentWave, ce.currentRound)
 	return block, nil
@@ -760,21 +759,28 @@ func (ce *ConsensusEngine) signBlock(block *types.Block) error {
 
 // BroadcastBlock broadcasts a block to all validators
 func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
-	ce.mu.RLock()
-	defer ce.mu.RUnlock()
+	ce.mu.Lock()
 
 	if !ce.running {
+		ce.mu.Unlock()
 		return errors.New("engine is not running")
 	}
 
 	// Check if block is nil
 	if block == nil {
 		ce.logger.Printf("Cannot broadcast nil block")
+		ce.mu.Unlock()
 		return nil
 	}
 
+	// Save the leader block for voting
+	ce.savedLeaderBlock = block
+	ce.logger.Printf("Saved leader block for voting: Hash=%x, Wave=%d",
+		block.ComputeHash(), block.Header.Wave)
+
 	// Sign the block
 	if err := ce.signBlock(block); err != nil {
+		ce.mu.Unlock()
 		return fmt.Errorf("failed to sign block: %v", err)
 	}
 
@@ -800,8 +806,14 @@ func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
 	// Store the proposal
 	ce.proposals[string(blockHash)] = proposal
 
+	// Get validators list while holding the lock
+	validators := make([]types.Address, len(ce.validators))
+	copy(validators, ce.validators)
+
+	ce.mu.Unlock() // Release lock before network operations
+
 	// Broadcast to all validators
-	for _, validator := range ce.validators {
+	for _, validator := range validators {
 		if validator != ce.nodeID { // Don't send to self
 			validatorAddr := ce.getValidatorAddress(validator)
 			if validatorAddr == "" {
