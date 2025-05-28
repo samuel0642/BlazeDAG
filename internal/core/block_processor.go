@@ -188,6 +188,9 @@ func NewBlockProcessor(config *Config, stateManager *StateManager, dag *DAG) *Bl
 
 // CreateBlock creates a new block
 func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave) (*types.Block, error) {
+	// DEBUGGING: Add logging at the very start
+	log.Printf("BLOCK_PROCESSOR: CreateBlock called for validator %s, round=%d, wave=%d", bp.config.NodeID, round, currentWave)
+
 	bp.mu.Lock()
 	defer bp.mu.Unlock()
 

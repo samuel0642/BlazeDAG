@@ -715,8 +715,15 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 		}
 	}
 
+	// DEBUGGING: Add detailed logging before calling block processor
+	ce.logger.Printf("About to call BlockProcessor.CreateBlock with round=%d, wave=%d", ce.currentRound, currentWave)
+
 	// Use BlockProcessor to create block, passing the current wave
 	block, err := ce.blockProcessor.CreateBlock(ce.currentRound, currentWave)
+
+	// DEBUGGING: Add detailed logging after calling block processor
+	ce.logger.Printf("BlockProcessor.CreateBlock returned: block=%v, err=%v", block != nil, err)
+
 	if err != nil {
 		ce.logger.Printf("Failed to create block: %v", err)
 		return nil, err
