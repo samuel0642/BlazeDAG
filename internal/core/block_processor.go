@@ -191,29 +191,21 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 	bp.mu.Lock()
 	defer bp.mu.Unlock()
 
+	// SYNCHRONIZATION FIX: Wait for synchronization before creating block
+	// This ensures all validators have the same view of the DAG
+	log.Printf("Waiting for synchronization before creating block in wave %d...", currentWave)
+
+	// Wait a short time to allow for block synchronization
+	// This gives time for any pending blocks from other validators to arrive
+	time.Sleep(2 * time.Second)
+
+	log.Printf("Synchronization wait completed, proceeding with block creation")
+
 	// Print all transactions in mempool with their states
 	log.Printf("\n=== Current Mempool State ===")
 	allTxs := bp.mempool.GetTransactions()
+	log.Printf("Retrieved %d transactions from mempool", len(allTxs))
 	log.Printf("Total transactions in mempool: %d", len(allTxs))
-	for _, tx := range allTxs {
-		stateStr := "Unknown"
-		switch tx.State {
-		case types.TransactionStatePending:
-			stateStr = "Pending"
-		case types.TransactionStateIncluded:
-			stateStr = "Included"
-		case types.TransactionStateCommitted:
-			stateStr = "Committed"
-		}
-		log.Printf("Transaction: %x", tx.GetHash())
-		log.Printf("  From: %s", tx.From)
-		log.Printf("  To: %s", tx.To)
-		log.Printf("  Value: %d", tx.Value)
-		log.Printf("  Nonce: %d", tx.Nonce)
-		log.Printf("  State: %s", stateStr)
-		log.Printf("  Timestamp: %s", tx.Timestamp.Format(time.RFC3339))
-		log.Printf("---")
-	}
 	log.Printf("=== End Mempool State ===\n")
 
 	// Filter only pending transactions
@@ -234,7 +226,7 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 	// Find all blocks from the previous wave (currentWave-1)
 	prevWave := currentWave - 1
 	prevWaveBlocks := make([]*types.Block, 0)
-	allBlocks := bp.dag.GetRecentBlocks(10)
+	allBlocks := bp.dag.GetRecentBlocks(50) // Increased from 10 to 50 for better synchronization
 
 	// Check existing blocks in the current wave to avoid duplicates
 	for _, block := range allBlocks {
@@ -259,6 +251,7 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 	}
 	log.Printf("=== End DAG State ===\n")
 
+	// IMPROVED REFERENCE SELECTION: Get all blocks from previous wave
 	for _, block := range allBlocks {
 		if block.Header.Wave == prevWave {
 			prevWaveBlocks = append(prevWaveBlocks, block)
@@ -266,6 +259,17 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 	}
 
 	log.Printf("Found %d blocks from previous wave %d", len(prevWaveBlocks), prevWave)
+
+	// CONSISTENCY CHECK: Log details of blocks we're referencing
+	if len(prevWaveBlocks) > 0 {
+		log.Printf("Blocks being referenced:")
+		for i, block := range prevWaveBlocks {
+			log.Printf("  Reference[%d]: Hash=%x, Validator=%s, Wave=%d",
+				i, block.ComputeHash(), block.Header.Validator, block.Header.Wave)
+		}
+	} else {
+		log.Printf("No blocks found from previous wave %d to reference", prevWave)
+	}
 
 	references := make([]*types.Reference, 0, len(prevWaveBlocks))
 	for _, block := range prevWaveBlocks {

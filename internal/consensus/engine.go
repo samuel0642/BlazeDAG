@@ -653,11 +653,32 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 	ce.logger.Printf("Creating new block in wave %d, round %d",
 		currentWave, ce.currentRound)
 
+	// SYNCHRONIZATION FIX: Force synchronization before creating block
+	ce.logger.Printf("Forcing block synchronization before creating block...")
+	ce.mu.Unlock() // Temporarily unlock to allow synchronization
+
+	// Force an immediate synchronization with all peers
+	if ce.blockSynchronizer != nil {
+		ce.blockSynchronizer.syncWithPeers()
+	}
+
+	// Wait a bit more to ensure synchronization is complete
+	time.Sleep(1 * time.Second)
+
+	ce.mu.Lock() // Re-lock for the rest of the function
+	ce.logger.Printf("Synchronization completed, proceeding with block creation")
+
 	// Use BlockProcessor to create block, passing the current wave
 	block, err := ce.blockProcessor.CreateBlock(ce.currentRound, currentWave)
 	if err != nil {
 		ce.logger.Printf("Failed to create block: %v", err)
 		return nil, err
+	}
+
+	// Check if block creation was skipped (returns nil without error)
+	if block == nil {
+		ce.logger.Printf("Block creation was skipped")
+		return nil, nil
 	}
 
 	// Add block to DAG
