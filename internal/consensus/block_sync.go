@@ -132,6 +132,57 @@ func (bs *BlockSynchronizer) syncWithPeers() {
 	bs.logger.Printf("Block synchronization completed")
 }
 
+// syncWithPeersNonBlocking synchronizes blocks with all peers without holding locks
+// This is used when called from consensus engine to avoid deadlocks
+func (bs *BlockSynchronizer) syncWithPeersNonBlocking() {
+	if !bs.running {
+		return
+	}
+
+	bs.logger.Printf("Starting non-blocking block synchronization with peers")
+
+	// Get our current blocks without holding the sync lock
+	ourBlocks := bs.dag.GetRecentBlocks(50)
+	ourID := bs.consensusEngine.nodeID
+
+	bs.logger.Printf("Our local blocks (%d):", len(ourBlocks))
+	for i, block := range ourBlocks {
+		if i < 5 { // Show first 5 blocks for debugging
+			bs.logger.Printf("  Block[%d]: Hash=%x, Wave=%d, Validator=%s",
+				i, block.ComputeHash(), block.Header.Wave, block.Header.Validator)
+		}
+	}
+	if len(ourBlocks) > 5 {
+		bs.logger.Printf("  ... and %d more blocks", len(ourBlocks)-5)
+	}
+
+	// Get validators from consensus engine
+	validators := bs.consensusEngine.GetValidators()
+
+	// Create a map of our block hashes for quick lookup
+	ourBlockHashes := make(map[string]bool)
+	for _, block := range ourBlocks {
+		ourBlockHashes[string(block.ComputeHash())] = true
+	}
+
+	// Sync with each validator
+	var wg sync.WaitGroup
+	for _, validator := range validators {
+		if validator == ourID {
+			continue // Skip ourselves
+		}
+
+		wg.Add(1)
+		go func(validatorID types.Address) {
+			defer wg.Done()
+			bs.syncWithValidator(validatorID, ourBlockHashes)
+		}(validator)
+	}
+
+	wg.Wait()
+	bs.logger.Printf("Non-blocking block synchronization completed")
+}
+
 // syncWithValidator synchronizes blocks with a specific validator
 func (bs *BlockSynchronizer) syncWithValidator(validatorID types.Address, ourBlockHashes map[string]bool) {
 	// Get validator address

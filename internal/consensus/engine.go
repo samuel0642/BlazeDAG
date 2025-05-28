@@ -694,9 +694,10 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 	ce.logger.Printf("Forcing block synchronization before creating block...")
 	ce.mu.Unlock() // Temporarily unlock to allow synchronization
 
-	// Force an immediate synchronization with all peers
+	// Force an immediate synchronization with all peers using non-blocking method
 	if ce.blockSynchronizer != nil {
-		ce.blockSynchronizer.syncWithPeers()
+		// Call non-blocking synchronization to avoid deadlock
+		ce.blockSynchronizer.syncWithPeersNonBlocking()
 	}
 
 	// Wait a bit more to ensure synchronization is complete
