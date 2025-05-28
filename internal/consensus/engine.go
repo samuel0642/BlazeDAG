@@ -708,12 +708,22 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 
 	// Double-check after synchronization that we haven't already created a block
 	recentBlocks = ce.dag.GetRecentBlocks(50)
-	for _, block := range recentBlocks {
+	ce.logger.Printf("DEBUGGING: Double-check after sync - found %d recent blocks, our nodeID=%s, currentWave=%d",
+		len(recentBlocks), ce.nodeID, currentWave)
+
+	for i, block := range recentBlocks {
+		ce.logger.Printf("DEBUGGING: Block[%d]: Wave=%d, Validator=%s, Hash=%x",
+			i, block.Header.Wave, block.Header.Validator, block.ComputeHash())
+
 		if block.Header.Wave == currentWave && block.Header.Validator == ce.nodeID {
+			ce.logger.Printf("DEBUGGING: Found our own block in wave %d, skipping creation", currentWave)
 			ce.logger.Printf("Block already exists after synchronization in wave %d, skipping", currentWave)
 			return nil, nil
 		}
 	}
+
+	ce.logger.Printf("DEBUGGING: No existing block found for our validator %s in wave %d, proceeding with creation",
+		ce.nodeID, currentWave)
 
 	// DEBUGGING: Add detailed logging before calling block processor
 	ce.logger.Printf("About to call BlockProcessor.CreateBlock with round=%d, wave=%d", ce.currentRound, currentWave)
