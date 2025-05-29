@@ -873,10 +873,12 @@ func (ce *ConsensusEngine) getValidatorAddress(validator types.Address) string {
 
 // HandleProposal handles incoming block proposals from other validators
 func (ce *ConsensusEngine) HandleProposal(proposal *types.Proposal) error {
-	ce.mu.Lock()
-	defer ce.mu.Unlock()
+	// Check if engine is running first (without mutex)
+	ce.mu.RLock()
+	running := ce.running
+	ce.mu.RUnlock()
 
-	if !ce.running {
+	if !running {
 		return errors.New("engine is not running")
 	}
 
@@ -884,19 +886,24 @@ func (ce *ConsensusEngine) HandleProposal(proposal *types.Proposal) error {
 	ce.logger.Printf("Received proposal - BlockHash: %x, Wave: %d, Round: %d, Proposer: %s",
 		proposal.BlockHash, proposal.Wave, proposal.Round, proposal.Proposer)
 
-	// Check if we already have this proposal
-	if _, exists := ce.proposals[string(proposal.BlockHash)]; exists {
+	// Check if we already have this proposal (with mutex)
+	ce.mu.RLock()
+	_, exists := ce.proposals[string(proposal.BlockHash)]
+	ce.mu.RUnlock()
+
+	if exists {
 		ce.logger.Printf("Proposal already exists, skipping duplicate")
 		return nil
 	}
 
-	// Verify proposal
+	// Verify proposal (this doesn't need mutex for most operations)
 	if err := ce.verifyProposal(proposal); err != nil {
 		ce.logger.Printf("Proposal verification failed: %v", err)
 		return fmt.Errorf("invalid proposal: %v", err)
 	}
 
-	// Check if proposer is the current wave leader
+	// Check if proposer is the current wave leader (with mutex)
+	ce.mu.Lock()
 	if ce.isWaveLeader(types.Address(proposal.Proposer)) {
 		// Save the block from wave leader
 		ce.savedLeaderBlock = proposal.Block
@@ -905,8 +912,9 @@ func (ce *ConsensusEngine) HandleProposal(proposal *types.Proposal) error {
 
 	// Store proposal
 	ce.proposals[string(proposal.BlockHash)] = proposal
+	ce.mu.Unlock()
 
-	// Process block
+	// Process block (this is the slow operation, do it without mutex)
 	if err := ce.processBlock(proposal.Block); err != nil {
 		ce.logger.Printf("Failed to process block: %v", err)
 		return fmt.Errorf("failed to process block: %v", err)

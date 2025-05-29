@@ -500,28 +500,15 @@ func (bp *BlockProcessor) GetMempoolTransactions() []*types.Transaction {
 	bp.mu.RLock()
 	defer bp.mu.RUnlock()
 
-	txs := bp.mempool.GetTransactions()
-	log.Printf("\n=== Mempool Transactions ===")
-	log.Printf("Total transactions: %d", len(txs))
-	for _, tx := range txs {
-		stateStr := "Unknown"
-		switch tx.State {
-		case types.TransactionStatePending:
-			stateStr = "Pending"
-		case types.TransactionStateIncluded:
-			stateStr = "Included"
-		case types.TransactionStateCommitted:
-			stateStr = "Committed"
-		}
-		log.Printf("Transaction: %x", tx.GetHash())
-		log.Printf("  From: %s", tx.From)
-		log.Printf("  To: %s", tx.To)
-		log.Printf("  Value: %d", tx.Value)
-		log.Printf("  Nonce: %d", tx.Nonce)
-		log.Printf("  State: %s", stateStr)
-		log.Printf("  Timestamp: %s", tx.Timestamp.Format(time.RFC3339))
-		log.Printf("---")
+	// Simple, fast approach - just get the transactions without complex parallel processing
+	bp.mempool.mu.RLock()
+	defer bp.mempool.mu.RUnlock()
+
+	txs := make([]*types.Transaction, 0, len(bp.mempool.transactions))
+	for _, tx := range bp.mempool.transactions {
+		txs = append(txs, tx)
 	}
-	log.Printf("=== End Mempool Transactions ===\n")
+
+	log.Printf("Retrieved %d transactions from mempool (simplified)", len(txs))
 	return txs
 }
