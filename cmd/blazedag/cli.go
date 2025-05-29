@@ -114,7 +114,7 @@ func (c *CLI) runChain() {
 			log.Printf("Error converting port to number: %v", err)
 			return
 		}
-		votePort := strconv.Itoa(portNum + 1000) // Add 1000 to the main port for vote listening
+		votePort := strconv.Itoa(portNum + 2000) // Use port + 2000 to avoid conflict with sync server (port 4000)
 
 		voteListener, err := net.Listen("tcp", ":"+votePort)
 		if err != nil {
@@ -234,6 +234,7 @@ func (c *CLI) runChain() {
 				log.Printf("Creating block for wave %d as validator %s", currentWave, c.config.NodeID)
 
 				// Create a block with current round number using consensus engine
+				log.Printf("Calling consensusEngine.CreateBlock()...")
 				block, err := c.consensusEngine.CreateBlock()
 				if err != nil {
 					log.Printf("Error creating block: %v", err)
@@ -242,6 +243,8 @@ func (c *CLI) runChain() {
 
 				// Only broadcast if we actually created a block (not nil)
 				if block != nil {
+					log.Printf("Block created successfully - Hash: %x, Wave: %d, Height: %d",
+						block.ComputeHash(), block.Header.Wave, block.Header.Height)
 					// Broadcast the block using consensus engine
 					if err := c.consensusEngine.BroadcastBlock(block); err != nil {
 						log.Printf("Error broadcasting block: %v", err)
@@ -249,6 +252,8 @@ func (c *CLI) runChain() {
 					}
 					blockCreatedInWave = true
 					log.Printf("Successfully created and broadcast block for wave %d", currentWave)
+				} else {
+					log.Printf("Warning: CreateBlock() returned nil block for wave %d", currentWave)
 				}
 			}
 
@@ -280,7 +285,7 @@ func (c *CLI) runChain() {
 							continue
 						}
 
-						// Extract port and add 1000 for vote port
+						// Extract port and add 2000 for vote port (matching the vote listener)
 						_, port, err := net.SplitHostPort(validatorAddr)
 						if err != nil {
 							log.Printf("Error parsing validator address: %v", err)
@@ -291,7 +296,7 @@ func (c *CLI) runChain() {
 							log.Printf("Error converting port to number: %v", err)
 							continue
 						}
-						votePort := strconv.Itoa(portNum + 1000)
+						votePort := strconv.Itoa(portNum + 2000) // Use port + 2000 to match vote listener
 						// Extract IP from validatorAddr and use it with the vote port
 						ip, _, err := net.SplitHostPort(validatorAddr)
 						if err != nil {
