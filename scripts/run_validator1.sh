@@ -19,7 +19,9 @@ if [ ! -f "bin/blazedag" ]; then
     exit 1
 fi
 
-echo "Starting validator1 on 54.183.204.244:3000..."
+echo "Starting Validator 1..."
+echo "Listen: localhost:3001"
+echo "Peers: localhost:3002,localhost:3003"
 
 # Start validator1 with the updated config
 ./bin/blazedag --config config.validator1.yaml
