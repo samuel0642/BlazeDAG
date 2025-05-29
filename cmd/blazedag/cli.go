@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -32,6 +33,7 @@ type CLI struct {
 	logger           *log.Logger
 	scanner          *bufio.Scanner
 	stopChan         chan struct{}
+	stopOnce         sync.Once
 	currentRound     int
 	approvedBlocks   map[string]bool // Changed from types.Hash to string
 	savedLeaderBlock *types.Block    // Add this field to store the wave leader's block
@@ -381,15 +383,17 @@ func (c *CLI) runChain() {
 
 // Stop stops the CLI
 func (c *CLI) Stop() {
-	close(c.stopChan)
-	if c.consensusEngine != nil {
-		c.consensusEngine.Stop()
-	}
+	c.stopOnce.Do(func() {
+		close(c.stopChan)
+		if c.consensusEngine != nil {
+			c.consensusEngine.Stop()
+		}
 
-	// Stop API server if running
-	if c.apiServer != nil {
-		c.apiServer.Stop()
-	}
+		// Stop API server if running
+		if c.apiServer != nil {
+			c.apiServer.Stop()
+		}
+	})
 }
 
 // initialize initializes the CLI components
