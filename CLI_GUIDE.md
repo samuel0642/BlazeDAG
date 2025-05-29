@@ -523,7 +523,7 @@ Block Properties:
 - Round: Current wave
 - Wave: Current wave
 - Height: Current height + 1
-- Parent Hash: Latest block hash
+- Parent Hash: Latest block hash 
 - Timestamp: Current time
 
 ## Network Operations
