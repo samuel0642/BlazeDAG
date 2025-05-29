@@ -795,22 +795,23 @@ func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
 
 			ce.logger.Printf("📤 SENDING to validator %s at %s...", validator, validatorAddr)
 
-			// Create connection to validator
-			conn, err := net.Dial("tcp", validatorAddr)
+			// Create connection to validator with shorter timeout
+			conn, err := net.DialTimeout("tcp", validatorAddr, 5*time.Second)
 			if err != nil {
 				ce.logger.Printf("❌ FAILED to connect to validator %s at %s: %v", validator, validatorAddr, err)
 				continue
 			}
-			defer conn.Close()
 
-			// Set write deadline
-			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			// Set shorter write and read deadlines
+			conn.SetWriteDeadline(time.Now().Add(3 * time.Second))
+			conn.SetReadDeadline(time.Now().Add(3 * time.Second))
 
 			// Create a buffer to hold the encoded proposal
 			var buf bytes.Buffer
 			encoder := gob.NewEncoder(&buf)
 			if err := encoder.Encode(proposal); err != nil {
 				ce.logger.Printf("❌ FAILED to encode proposal for validator %s: %v", validator, err)
+				conn.Close()
 				continue
 			}
 
@@ -819,18 +820,22 @@ func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
 			// Write the encoded proposal to the connection
 			if _, err := conn.Write(buf.Bytes()); err != nil {
 				ce.logger.Printf("❌ FAILED to send proposal to validator %s: %v", validator, err)
+				conn.Close()
 				continue
 			}
 
 			ce.logger.Printf("📤 Waiting for ACK from validator %s...", validator)
 
-			// Wait for acknowledgment
+			// Wait for acknowledgment with shorter timeout
 			ackBuf := make([]byte, 3) // "ACK" is 3 bytes
-			conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 			if _, err := conn.Read(ackBuf); err != nil {
 				ce.logger.Printf("❌ FAILED to receive ACK from validator %s: %v", validator, err)
+				conn.Close()
 				continue
 			}
+
+			// Close connection immediately after successful communication
+			conn.Close()
 
 			if !bytes.Equal(ackBuf, []byte("ACK")) {
 				ce.logger.Printf("❌ Invalid ACK from validator %s: got %s", validator, string(ackBuf))

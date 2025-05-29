@@ -3,6 +3,7 @@ package consensus
 import (
 	"sync"
 	"time"
+
 	// "fmt"
 	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
@@ -38,21 +39,30 @@ func (wm *WaveManager) Stop() {
 
 // run runs the wave manager loop
 func (wm *WaveManager) run() {
+	lastBlockCreationWave := types.Wave(0)
+
 	for {
 		select {
 		case <-wm.timer.C:
 			wm.ProcessTimeout()
 			wm.timer.Reset(wm.timeout)
 		default:
-			// Handle wave phases
-			if true {
-				// fmt.Println("------------------------------------")
-				if err := wm.handleWaveProposing(); err != nil {
-					wm.engine.logger.Printf("Error handling wave proposing: %v", err)
+			// Only create blocks when we are the leader and haven't created one for this wave
+			if wm.engine.IsLeader() {
+				currentWave := wm.engine.GetCurrentWave()
+				if currentWave > lastBlockCreationWave {
+					wm.engine.logger.Printf("🏗️ Wave manager triggering block creation for wave %d (leader: %s)",
+						currentWave, wm.engine.GetNodeID())
+
+					if err := wm.handleWaveProposing(); err != nil {
+						wm.engine.logger.Printf("❌ Error handling wave proposing: %v", err)
+					} else {
+						lastBlockCreationWave = currentWave
+						wm.engine.logger.Printf("✅ Wave manager completed block creation for wave %d", currentWave)
+					}
 				}
-				// fmt.Println("------------------------------------")
 			}
-			time.Sleep(10000 * time.Millisecond) // Avoid busy waiting
+			time.Sleep(1000 * time.Millisecond) // Check every second instead of 10 seconds
 		}
 	}
 }
@@ -87,19 +97,25 @@ func (wm *WaveManager) FinalizeWave() {
 // handleWaveProposing handles the proposing phase of a wave
 func (wm *WaveManager) handleWaveProposing() error {
 	// Check if we are the leader
-	// if !wm.engine.IsLeader() {
-	// 	return nil
-	// }
+	if !wm.engine.IsLeader() {
+		return nil
+	}
 
 	// Create block
-	// fmt.Println("++++++++++++++++++++++++++++")
-	// block, err := wm.engine.CreateBlock()
-	// fmt.Println(block)
-	// fmt.Println("++++++++++++++++++++++++++++")
-	// if err != nil {
-	// 	return err
-	// }
+	wm.engine.logger.Printf("🏗️ Wave manager creating block...")
+	block, err := wm.engine.CreateBlock()
+	if err != nil {
+		wm.engine.logger.Printf("❌ Wave manager failed to create block: %v", err)
+		return err
+	}
+
+	if block == nil {
+		wm.engine.logger.Printf("⚠️ Wave manager: CreateBlock returned nil, skipping broadcast")
+		return nil
+	}
+
+	wm.engine.logger.Printf("🏗️ Wave manager created block %x, now broadcasting...", block.ComputeHash())
 
 	// Broadcast block
-	return nil
-} 
+	return wm.engine.BroadcastBlock(block)
+}
