@@ -320,7 +320,12 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 			log.Printf("Block %x already exists in DAG, continuing", blockHash)
 		} else {
 			log.Printf("Warning: Failed to add block to DAG: %v", err)
+			return nil, fmt.Errorf("failed to add block to DAG: %v", err)
 		}
+	} else {
+		// Log successful addition to DAG
+		log.Printf("Added block to DAG - Hash: %x, Height: %d, Validator: %s, References: %d",
+			blockHash, block.Header.Height, block.Header.Validator, len(block.Header.References))
 	}
 
 	// Update transaction states in mempool instead of removing them

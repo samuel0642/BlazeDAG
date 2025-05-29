@@ -660,11 +660,7 @@ func (ce *ConsensusEngine) CreateBlock() (*types.Block, error) {
 		return nil, err
 	}
 
-	// Add block to DAG
-	if err := ce.dag.AddBlock(block); err != nil {
-		ce.logger.Printf("Failed to add block to DAG: %v", err)
-		return nil, err
-	}
+	// Block is already added to DAG by BlockProcessor, no need to add again
 
 	ce.logger.Printf("Created block %s in wave %d, round %d",
 		block.ComputeHash(), currentWave, ce.currentRound)
@@ -748,7 +744,7 @@ func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
 
 	// Check if block is nil
 	if block == nil {
-		ce.logger.Printf("Cannot broadcast nil block")
+		ce.logger.Printf("❌ BROADCAST FAILED: Cannot broadcast nil block")
 		return nil
 	}
 
@@ -761,9 +757,15 @@ func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
 	blockHash := block.ComputeHash()
 
 	// Log detailed information about the block being broadcast
-	ce.logger.Printf("Broadcasting block: Hash=%x, Height=%d, Wave=%d, Round=%d, Validator=%s, References=%d",
-		blockHash, block.Header.Height, block.Header.Wave, block.Header.Round,
-		block.Header.Validator, len(block.Header.References))
+	ce.logger.Printf("📤📤📤 STARTING BLOCK BROADCAST 📤📤📤")
+	ce.logger.Printf("📤 Block Hash: %x", blockHash)
+	ce.logger.Printf("📤 Block Height: %d, Wave: %d, Round: %d",
+		block.Header.Height, block.Header.Wave, block.Header.Round)
+	ce.logger.Printf("📤 Block Validator: %s", block.Header.Validator)
+	ce.logger.Printf("📤 Block References: %d", len(block.Header.References))
+	ce.logger.Printf("📤 Block Transactions: %d", len(block.Body.Transactions))
+	ce.logger.Printf("📤 All validators: %v", ce.validators)
+	ce.logger.Printf("📤 Our node ID: %s", ce.nodeID)
 
 	// Create proposal with the full block
 	proposal := &types.Proposal{
@@ -780,21 +782,23 @@ func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
 	ce.proposals[string(blockHash)] = proposal
 
 	// Broadcast to all validators
+	successCount := 0
+	totalTargets := 0
 	for _, validator := range ce.validators {
 		if validator != ce.nodeID { // Don't send to self
+			totalTargets++
 			validatorAddr := ce.getValidatorAddress(validator)
 			if validatorAddr == "" {
-				ce.logger.Printf("Warning: No address found for validator %s", validator)
+				ce.logger.Printf("⚠️ WARNING: No address found for validator %s", validator)
 				continue
 			}
 
-			ce.logger.Printf("Broadcasting block %x to validator %s at %s",
-				blockHash, validator, validatorAddr)
+			ce.logger.Printf("📤 SENDING to validator %s at %s...", validator, validatorAddr)
 
 			// Create connection to validator
 			conn, err := net.Dial("tcp", validatorAddr)
 			if err != nil {
-				ce.logger.Printf("Error connecting to validator %s at %s: %v", validator, validatorAddr, err)
+				ce.logger.Printf("❌ FAILED to connect to validator %s at %s: %v", validator, validatorAddr, err)
 				continue
 			}
 			defer conn.Close()
@@ -806,31 +810,43 @@ func (ce *ConsensusEngine) BroadcastBlock(block *types.Block) error {
 			var buf bytes.Buffer
 			encoder := gob.NewEncoder(&buf)
 			if err := encoder.Encode(proposal); err != nil {
-				ce.logger.Printf("Error encoding proposal for validator %s: %v", validator, err)
+				ce.logger.Printf("❌ FAILED to encode proposal for validator %s: %v", validator, err)
 				continue
 			}
 
+			ce.logger.Printf("📤 Sending %d bytes to validator %s", buf.Len(), validator)
+
 			// Write the encoded proposal to the connection
 			if _, err := conn.Write(buf.Bytes()); err != nil {
-				ce.logger.Printf("Error sending proposal to validator %s: %v", validator, err)
+				ce.logger.Printf("❌ FAILED to send proposal to validator %s: %v", validator, err)
 				continue
 			}
+
+			ce.logger.Printf("📤 Waiting for ACK from validator %s...", validator)
 
 			// Wait for acknowledgment
 			ackBuf := make([]byte, 3) // "ACK" is 3 bytes
 			conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 			if _, err := conn.Read(ackBuf); err != nil {
-				ce.logger.Printf("Error receiving acknowledgment from validator %s: %v", validator, err)
+				ce.logger.Printf("❌ FAILED to receive ACK from validator %s: %v", validator, err)
 				continue
 			}
 
 			if !bytes.Equal(ackBuf, []byte("ACK")) {
-				ce.logger.Printf("Invalid acknowledgment from validator %s", validator)
+				ce.logger.Printf("❌ Invalid ACK from validator %s: got %s", validator, string(ackBuf))
 				continue
 			}
 
-			ce.logger.Printf("Successfully sent block to validator %s", validator)
+			ce.logger.Printf("✅ SUCCESS: Block sent to validator %s", validator)
+			successCount++
 		}
+	}
+
+	ce.logger.Printf("📤📤📤 BROADCAST COMPLETE: %d/%d validators received block %x 📤📤📤",
+		successCount, totalTargets, blockHash)
+
+	if successCount == 0 && totalTargets > 0 {
+		ce.logger.Printf("❌❌❌ BROADCAST FAILED: No validators received the block! ❌❌❌")
 	}
 
 	return nil
@@ -1115,7 +1131,7 @@ func (ns *NetworkServer) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
 	remoteAddr := conn.RemoteAddr().String()
-	ns.consensusEngine.logger.Printf("New connection from %s", remoteAddr)
+	ns.consensusEngine.logger.Printf("📥 NEW CONNECTION from %s", remoteAddr)
 
 	// Set read deadline
 	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
@@ -1124,9 +1140,11 @@ func (ns *NetworkServer) handleConnection(conn net.Conn) {
 	buf := make([]byte, 4096)
 	n, err := conn.Read(buf)
 	if err != nil {
-		ns.consensusEngine.logger.Printf("Error reading from %s: %v", remoteAddr, err)
+		ns.consensusEngine.logger.Printf("❌ ERROR reading from %s: %v", remoteAddr, err)
 		return
 	}
+
+	ns.consensusEngine.logger.Printf("📥 RECEIVED %d bytes from %s", n, remoteAddr)
 
 	// Create a buffer with the received data
 	reader := bytes.NewReader(buf[:n])
@@ -1135,20 +1153,27 @@ func (ns *NetworkServer) handleConnection(conn net.Conn) {
 	decoder := gob.NewDecoder(reader)
 	var proposal types.Proposal
 	if err := decoder.Decode(&proposal); err != nil {
-		ns.consensusEngine.logger.Printf("Error decoding message from %s: %v", remoteAddr, err)
+		ns.consensusEngine.logger.Printf("❌ ERROR decoding proposal from %s: %v", remoteAddr, err)
 		return
 	}
 
 	// Basic validation before passing to consensus engine
 	if proposal.Block == nil {
-		ns.consensusEngine.logger.Printf("Received proposal with nil block from %s", remoteAddr)
+		ns.consensusEngine.logger.Printf("❌ ERROR: Received proposal with nil block from %s", remoteAddr)
 		return
 	}
 
-	// Log the received proposal
+	// Log the received proposal details
 	blockHash := proposal.BlockHash
-	ns.consensusEngine.logger.Printf("Received proposal from %s - BlockHash: %x, Validator: %s, Wave: %d, Round: %d",
-		remoteAddr, blockHash, proposal.Block.Header.Validator, proposal.Wave, proposal.Round)
+	ns.consensusEngine.logger.Printf("📥📥📥 RECEIVED BLOCK PROPOSAL 📥📥📥")
+	ns.consensusEngine.logger.Printf("📥 From: %s", remoteAddr)
+	ns.consensusEngine.logger.Printf("📥 Block Hash: %x", blockHash)
+	ns.consensusEngine.logger.Printf("📥 Proposer: %s", proposal.Proposer)
+	ns.consensusEngine.logger.Printf("📥 Block Validator: %s", proposal.Block.Header.Validator)
+	ns.consensusEngine.logger.Printf("📥 Wave: %d, Round: %d", proposal.Wave, proposal.Round)
+	ns.consensusEngine.logger.Printf("📥 Block Height: %d", proposal.Block.Header.Height)
+	ns.consensusEngine.logger.Printf("📥 Block References: %d", len(proposal.Block.Header.References))
+	ns.consensusEngine.logger.Printf("📥 Block Transactions: %d", len(proposal.Block.Body.Transactions))
 
 	// Verify the proposal came from a valid validator
 	isValidValidator := false
@@ -1159,24 +1184,28 @@ func (ns *NetworkServer) handleConnection(conn net.Conn) {
 		}
 	}
 	if !isValidValidator {
-		ns.consensusEngine.logger.Printf("Invalid proposer: %s", string(proposal.Proposer))
+		ns.consensusEngine.logger.Printf("❌ REJECTED: Invalid proposer %s", string(proposal.Proposer))
 		return
 	}
 
+	ns.consensusEngine.logger.Printf("📥 PROCESSING proposal from valid validator %s...", proposal.Proposer)
+
 	// Use HandleProposal to process the received proposal
 	if err := ns.consensusEngine.HandleProposal(&proposal); err != nil {
-		ns.consensusEngine.logger.Printf("Error handling proposal from %s: %v", remoteAddr, err)
+		ns.consensusEngine.logger.Printf("❌ ERROR handling proposal from %s: %v", remoteAddr, err)
 		return
 	}
+
+	ns.consensusEngine.logger.Printf("📥 SENDING ACK to %s", remoteAddr)
 
 	// Send acknowledgment
 	ack := []byte("ACK")
 	if _, err := conn.Write(ack); err != nil {
-		ns.consensusEngine.logger.Printf("Error sending acknowledgment to %s: %v", remoteAddr, err)
+		ns.consensusEngine.logger.Printf("❌ ERROR sending ACK to %s: %v", remoteAddr, err)
 		return
 	}
 
-	ns.consensusEngine.logger.Printf("Successfully processed proposal from %s and sent acknowledgment", remoteAddr)
+	ns.consensusEngine.logger.Printf("✅ SUCCESSFULLY processed proposal from %s and sent ACK", remoteAddr)
 }
 
 // Stop stops the consensus engine

@@ -224,8 +224,9 @@ func (bs *BlockSynchronizer) getValidatorSyncAddress(validator types.Address) st
 
 // HandleSyncRequest handles incoming block sync requests
 func (bs *BlockSynchronizer) HandleSyncRequest(req *SyncRequest, conn net.Conn) {
-	bs.logger.Printf("Received sync request from %s with %d known blocks",
-		req.RequestingNode, len(req.KnownBlocks))
+	bs.logger.Printf("🔄🔄🔄 RECEIVED SYNC REQUEST 🔄🔄🔄")
+	bs.logger.Printf("🔄 From: %s", req.RequestingNode)
+	bs.logger.Printf("🔄 They know %d blocks", len(req.KnownBlocks))
 
 	// Create a set of known block hashes for quick lookup
 	knownBlocks := make(map[string]bool)
@@ -242,29 +243,43 @@ func (bs *BlockSynchronizer) HandleSyncRequest(req *SyncRequest, conn net.Conn) 
 		Blocks:         make([]*types.Block, 0),
 	}
 
-	for _, block := range ourBlocks {
+	bs.logger.Printf("🔄 ANALYZING %d local blocks for sync response", len(ourBlocks))
+	blocksToSend := 0
+	blocksAlreadyKnown := 0
+
+	for i, block := range ourBlocks {
 		blockHash := block.ComputeHash()
 		if !knownBlocks[string(blockHash)] {
 			resp.Blocks = append(resp.Blocks, block)
+			bs.logger.Printf("🔄 Block %d WILL SEND: Hash=%x, Wave=%d, Validator=%s",
+				i+1, blockHash, block.Header.Wave, block.Header.Validator)
+			blocksToSend++
+		} else {
+			bs.logger.Printf("🔄 Block %d ALREADY KNOWN: Hash=%x",
+				i+1, blockHash)
+			blocksAlreadyKnown++
 		}
 	}
 
-	bs.logger.Printf("Sending %d blocks to %s", len(resp.Blocks), req.RequestingNode)
+	bs.logger.Printf("🔄 SUMMARY: %d blocks to send, %d already known", blocksToSend, blocksAlreadyKnown)
+	bs.logger.Printf("🔄 SENDING %d blocks to %s", len(resp.Blocks), req.RequestingNode)
 
 	// Send the response
 	var buf bytes.Buffer
 	encoder := gob.NewEncoder(&buf)
 	if err := encoder.Encode(resp); err != nil {
-		bs.logger.Printf("Failed to encode sync response: %v", err)
+		bs.logger.Printf("❌ FAILED to encode sync response: %v", err)
 		return
 	}
+
+	bs.logger.Printf("🔄 Sending %d bytes to %s", buf.Len(), req.RequestingNode)
 
 	if _, err := conn.Write(buf.Bytes()); err != nil {
-		bs.logger.Printf("Failed to send sync response: %v", err)
+		bs.logger.Printf("❌ FAILED to send sync response: %v", err)
 		return
 	}
 
-	bs.logger.Printf("Sync response sent to %s", req.RequestingNode)
+	bs.logger.Printf("✅ SYNC RESPONSE sent to %s", req.RequestingNode)
 }
 
 // SyncRequest represents a request for block synchronization
