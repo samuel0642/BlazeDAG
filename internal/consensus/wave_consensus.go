@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 
@@ -28,6 +29,10 @@ type WaveConsensus struct {
 	// Network configuration  
 	listenAddr    string
 	peers         []string
+	
+	// HTTP API configuration
+	httpAddr      string
+	httpServer    *http.Server
 	
 	// Synchronization
 	mu            sync.RWMutex
@@ -69,6 +74,10 @@ type WaveMessage struct {
 func NewWaveConsensus(validatorID types.Address, dagReader DAGReader, listenAddr string, peers []string, waveDuration time.Duration) *WaveConsensus {
 	ctx, cancel := context.WithCancel(context.Background())
 	
+	// Set up HTTP API on port 8081 for wave consensus
+	host, _, _ := net.SplitHostPort(listenAddr)
+	httpAddr := fmt.Sprintf("%s:8081", host) // Wave consensus HTTP API on port 8081
+	
 	return &WaveConsensus{
 		validatorID:    validatorID,
 		dagReader:      dagReader,
@@ -76,6 +85,7 @@ func NewWaveConsensus(validatorID types.Address, dagReader DAGReader, listenAddr
 		waveDuration:   waveDuration,
 		listenAddr:     listenAddr,
 		peers:          peers,
+		httpAddr:       httpAddr,
 		ctx:            ctx,
 		cancel:         cancel,
 		waveBlocks:     make(map[types.Wave][]*types.Block),
@@ -94,6 +104,11 @@ func (wc *WaveConsensus) Start() error {
 		return fmt.Errorf("failed to start listener: %v", err)
 	}
 	
+	// Start HTTP API server
+	if err := wc.startHTTPServer(); err != nil {
+		return fmt.Errorf("failed to start HTTP server: %v", err)
+	}
+	
 	// Connect to peers
 	go wc.connectToPeers()
 	
@@ -103,6 +118,7 @@ func (wc *WaveConsensus) Start() error {
 	
 	log.Printf("Wave Consensus [%s]: Started at %s, connecting to %d peers", 
 		wc.validatorID, wc.listenAddr, len(wc.peers))
+	log.Printf("Wave Consensus [%s]: HTTP API available at http://%s", wc.validatorID, wc.httpAddr)
 	
 	return nil
 }
@@ -114,6 +130,12 @@ func (wc *WaveConsensus) Stop() {
 	
 	if wc.waveTicker != nil {
 		wc.waveTicker.Stop()
+	}
+	
+	if wc.httpServer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		wc.httpServer.Shutdown(ctx)
 	}
 	
 	if wc.listener != nil {
@@ -532,4 +554,36 @@ func (wc *WaveConsensus) GetCurrentWave() types.Wave {
 	wc.mu.RLock()
 	defer wc.mu.RUnlock()
 	return wc.currentWave
+}
+
+// startHTTPServer starts the HTTP API server
+func (wc *WaveConsensus) startHTTPServer() error {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/wave_status", wc.handleWaveStatus)
+	mux.HandleFunc("/current_wave", wc.handleCurrentWave)
+	
+	wc.httpServer = &http.Server{
+		Addr:    wc.httpAddr,
+		Handler: mux,
+	}
+	
+	go func() {
+		if err := wc.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("Wave Consensus [%s]: HTTP server error: %v", wc.validatorID, err)
+		}
+	}()
+	
+	return nil
+}
+
+// handleWaveStatus handles the /wave_status API endpoint
+func (wc *WaveConsensus) handleWaveStatus(w http.ResponseWriter, r *http.Request) {
+	status := wc.GetWaveStatus()
+	json.NewEncoder(w).Encode(status)
+}
+
+// handleCurrentWave handles the /current_wave API endpoint
+func (wc *WaveConsensus) handleCurrentWave(w http.ResponseWriter, r *http.Request) {
+	currentWave := wc.GetCurrentWave()
+	json.NewEncoder(w).Encode(currentWave)
 } 

@@ -57,10 +57,13 @@ type DAGMessage struct {
 func NewDAGSync(validatorID types.Address, listenAddr string, peers []string, roundDuration time.Duration) *DAGSync {
 	ctx, cancel := context.WithCancel(context.Background())
 	
-	// Calculate HTTP API port based on TCP port
-	host, portStr, _ := net.SplitHostPort(listenAddr)
-	port, _ := strconv.Atoi(portStr)
-	httpAddr := fmt.Sprintf("%s:%d", host, port+1000) // HTTP port = TCP port + 1000
+	// Use fixed HTTP API port 8080 for frontend compatibility
+	// Extract host from listenAddr or default to 0.0.0.0
+	host := "0.0.0.0"
+	if h, _, err := net.SplitHostPort(listenAddr); err == nil && h != "" {
+		host = h
+	}
+	httpAddr := fmt.Sprintf("%s:8080", host) // Fixed port for Explorer frontend
 	
 	return &DAGSync{
 		validatorID:   validatorID,
@@ -528,17 +531,38 @@ func (ds *DAGSync) GetValidatorID() types.Address {
 func (ds *DAGSync) startHTTPServer() error {
 	mux := http.NewServeMux()
 	
+	// Enable CORS for all endpoints
+	corsHandler := func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			
+			if r.Method == "OPTIONS" {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			
+			h.ServeHTTP(w, r)
+		})
+	}
+	
 	// Register API routes
 	mux.HandleFunc("/", ds.handleRoot)
 	mux.HandleFunc("/blocks", ds.handleGetBlocks)
 	mux.HandleFunc("/status", ds.handleGetStatus)
+	mux.HandleFunc("/dag/stats", ds.handleGetDAGStats)
+	mux.HandleFunc("/transactions", ds.handleGetTransactions)
+	mux.HandleFunc("/validators", ds.handleGetValidators)
+	mux.HandleFunc("/consensus/wave", ds.handleGetConsensusWave)
 	
 	ds.httpServer = &http.Server{
 		Addr:    ds.httpAddr,
-		Handler: mux,
+		Handler: corsHandler(mux),
 	}
 	
 	go func() {
+		log.Printf("DAG Sync [%s]: Starting HTTP API server on %s", ds.validatorID, ds.httpAddr)
 		if err := ds.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Printf("DAG Sync [%s]: HTTP server error: %v", ds.validatorID, err)
 		}
@@ -602,4 +626,155 @@ func (ds *DAGSync) handleGetStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	status := ds.GetDAGStatus()
 	json.NewEncoder(w).Encode(status)
+}
+
+// handleGetDAGStats handles the DAG stats endpoint
+func (ds *DAGSync) handleGetDAGStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	ds.mu.RLock()
+	roundCounts := make(map[string]int)
+	for round, blocks := range ds.roundBlocks {
+		roundCounts[fmt.Sprintf("round_%d", round)] = len(blocks)
+	}
+	ds.mu.RUnlock()
+	
+	ds.connMu.RLock()
+	connectedPeers := len(ds.connections)
+	ds.connMu.RUnlock()
+	
+	stats := map[string]interface{}{
+		"total_blocks":     ds.dag.GetBlockCount(),
+		"dag_height":       ds.dag.GetHeight(),
+		"current_round":    ds.currentRound,
+		"connected_peers":  connectedPeers,
+		"blocks_per_round": roundCounts,
+		"validator_id":     string(ds.validatorID),
+		"listen_addr":      ds.listenAddr,
+		"peers":           ds.peers,
+	}
+	
+	json.NewEncoder(w).Encode(stats)
+}
+
+// handleGetTransactions handles the transactions endpoint
+func (ds *DAGSync) handleGetTransactions(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	// Get count parameter (default to 100)
+	countStr := r.URL.Query().Get("count")
+	count := 100
+	if countStr != "" {
+		var err error
+		count, err = strconv.Atoi(countStr)
+		if err != nil || count <= 0 {
+			http.Error(w, "Invalid count parameter", http.StatusBadRequest)
+			return
+		}
+	}
+	
+	// Get recent blocks and extract transactions
+	blocks := ds.GetRecentBlocks(count / 5) // Assuming ~5 tx per block
+	transactions := make([]map[string]interface{}, 0)
+	
+	for _, block := range blocks {
+		for _, tx := range block.Body.Transactions {
+			txMap := map[string]interface{}{
+				"hash":      fmt.Sprintf("%x", tx.GetHash()),
+				"from":      string(tx.From),
+				"to":        string(tx.To),
+				"value":     tx.Value,
+				"nonce":     tx.Nonce,
+				"gasLimit":  tx.GasLimit,
+				"gasPrice":  tx.GasPrice,
+				"timestamp": tx.Timestamp,
+				"state":     tx.State,
+				"blockHash": fmt.Sprintf("%x", block.ComputeHash()),
+				"blockHeight": block.Header.Height,
+			}
+			transactions = append(transactions, txMap)
+			
+			if len(transactions) >= count {
+				break
+			}
+		}
+		if len(transactions) >= count {
+			break
+		}
+	}
+	
+	json.NewEncoder(w).Encode(transactions)
+}
+
+// handleGetValidators handles the validators endpoint
+func (ds *DAGSync) handleGetValidators(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	// Get all unique validators from recent blocks
+	validatorMap := make(map[string]map[string]interface{})
+	
+	// Add ourselves
+	validatorMap[string(ds.validatorID)] = map[string]interface{}{
+		"id":            string(ds.validatorID),
+		"status":        "active",
+		"blocks_created": 0,
+		"last_seen":     time.Now(),
+		"is_connected":  true,
+	}
+	
+	// Count blocks created by each validator
+	blocks := ds.GetRecentBlocks(1000)
+	for _, block := range blocks {
+		validatorID := string(block.Header.Validator)
+		if validator, exists := validatorMap[validatorID]; exists {
+			validator["blocks_created"] = validator["blocks_created"].(int) + 1
+			validator["last_seen"] = block.Header.Timestamp
+		} else {
+			validatorMap[validatorID] = map[string]interface{}{
+				"id":             validatorID,
+				"status":         "active",
+				"blocks_created": 1,
+				"last_seen":      block.Header.Timestamp,
+				"is_connected":   false, // We don't know about other validators' connection status
+			}
+		}
+	}
+	
+	// Check which validators are connected
+	ds.connMu.RLock()
+	for _ = range ds.connections {
+		// Try to match peer addresses to validator IDs (simplified)
+		for validatorID, validator := range validatorMap {
+			if validatorID != string(ds.validatorID) {
+				validator["is_connected"] = true
+			}
+		}
+	}
+	ds.connMu.RUnlock()
+	
+	// Convert map to slice
+	validators := make([]map[string]interface{}, 0, len(validatorMap))
+	for _, validator := range validatorMap {
+		validators = append(validators, validator)
+	}
+	
+	json.NewEncoder(w).Encode(validators)
+}
+
+// handleGetConsensusWave handles the consensus wave endpoint
+func (ds *DAGSync) handleGetConsensusWave(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	// DAG sync doesn't handle waves directly, but we can provide basic info
+	waveInfo := map[string]interface{}{
+		"current_wave":    0, // DAG sync doesn't track waves
+		"wave_status":     "dag_sync_only",
+		"message":         "Wave consensus is handled by separate wave consensus service",
+		"dag_round":       ds.currentRound,
+		"suggestion":      "Connect to wave consensus service for wave information",
+		"blocks_in_dag":   ds.dag.GetBlockCount(),
+		"current_height":  ds.dag.GetHeight(),
+	}
+	
+	json.NewEncoder(w).Encode(waveInfo)
 } 

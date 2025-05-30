@@ -43,7 +43,7 @@ demo-separation:
 # Build the DAG sync binary
 build-dagsync:
 	@echo "Building DAG sync..."
-	go build -o dagsync ./cmd/dagsync/simple_main.go
+	go build -o dagsync ./cmd/dagsync
 	@echo "DAG sync built successfully!"
 
 # Run single validator (for testing DAG sync)
@@ -108,7 +108,7 @@ build-combined:
 # Build the wave-only binary
 build-wave:
 	@echo "Building wave consensus only..."
-	go build -o wave-consensus ./cmd/wave/main.go
+	go build -o wave-consensus ./cmd/wave
 	@echo "Wave consensus binary built successfully!"
 
 # Run combined DAG sync + Wave consensus (single validator)
