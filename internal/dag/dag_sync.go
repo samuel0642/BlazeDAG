@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -22,6 +24,10 @@ type DAGSync struct {
 	// Network configuration
 	listenAddr    string
 	peers         []string
+	
+	// HTTP API configuration
+	httpAddr      string
+	httpServer    *http.Server
 	
 	// Synchronization
 	mu            sync.RWMutex
@@ -51,6 +57,11 @@ type DAGMessage struct {
 func NewDAGSync(validatorID types.Address, listenAddr string, peers []string, roundDuration time.Duration) *DAGSync {
 	ctx, cancel := context.WithCancel(context.Background())
 	
+	// Calculate HTTP API port based on TCP port
+	host, portStr, _ := net.SplitHostPort(listenAddr)
+	port, _ := strconv.Atoi(portStr)
+	httpAddr := fmt.Sprintf("%s:%d", host, port+1000) // HTTP port = TCP port + 1000
+	
 	return &DAGSync{
 		validatorID:   validatorID,
 		dag:           NewDAG(),
@@ -58,6 +69,7 @@ func NewDAGSync(validatorID types.Address, listenAddr string, peers []string, ro
 		roundDuration: roundDuration,
 		listenAddr:    listenAddr,
 		peers:         peers,
+		httpAddr:      httpAddr,
 		ctx:           ctx,
 		cancel:        cancel,
 		roundBlocks:   make(map[types.Round][]*types.Block),
@@ -74,6 +86,11 @@ func (ds *DAGSync) Start() error {
 		return fmt.Errorf("failed to start listener: %v", err)
 	}
 	
+	// Start HTTP API server
+	if err := ds.startHTTPServer(); err != nil {
+		return fmt.Errorf("failed to start HTTP server: %v", err)
+	}
+	
 	// Connect to peers
 	go ds.connectToPeers()
 	
@@ -83,6 +100,7 @@ func (ds *DAGSync) Start() error {
 	
 	log.Printf("DAG Sync [%s]: Started at %s, connecting to %d peers", 
 		ds.validatorID, ds.listenAddr, len(ds.peers))
+	log.Printf("DAG Sync [%s]: HTTP API available at http://%s", ds.validatorID, ds.httpAddr)
 	
 	return nil
 }
@@ -94,6 +112,12 @@ func (ds *DAGSync) Stop() {
 	
 	if ds.roundTicker != nil {
 		ds.roundTicker.Stop()
+	}
+	
+	if ds.httpServer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		ds.httpServer.Shutdown(ctx)
 	}
 	
 	if ds.listener != nil {
@@ -245,6 +269,9 @@ func (ds *DAGSync) createRoundBlock(round types.Round) {
 		},
 	}
 	
+	// Calculate block hash before adding to DAG
+	blockHash := block.ComputeHash()
+	
 	// Add to local DAG
 	if err := ds.dag.AddBlock(block); err != nil {
 		log.Printf("DAG Sync [%s]: Failed to add block to DAG: %v", ds.validatorID, err)
@@ -258,6 +285,16 @@ func (ds *DAGSync) createRoundBlock(round types.Round) {
 	}
 	ds.roundBlocks[round] = append(ds.roundBlocks[round], block)
 	ds.mu.Unlock()
+	
+	// Detailed logging with block information
+	log.Printf("🔥 DAG Sync [%s]: CREATED BLOCK Details:", ds.validatorID)
+	log.Printf("   📦 Hash: %x", blockHash)
+	log.Printf("   🔄 Round: %d", block.Header.Round)
+	log.Printf("   📏 Height: %d", block.Header.Height)
+	log.Printf("   👤 Validator: %s", block.Header.Validator)
+	log.Printf("   🔗 References: %d", len(references))
+	log.Printf("   💼 Transactions: %d", len(transactions))
+	log.Printf("   ⏰ Timestamp: %s", block.Header.Timestamp.Format("15:04:05"))
 	
 	log.Printf("DAG Sync [%s]: Created block for round %d with %d references", 
 		ds.validatorID, round, len(references))
@@ -458,4 +495,111 @@ func (ds *DAGSync) GetCurrentRound() types.Round {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 	return ds.currentRound
+}
+
+// GetBlocksForRound returns all blocks for a specific round
+func (ds *DAGSync) GetBlocksForRound(round types.Round) []*types.Block {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	
+	blocks := make([]*types.Block, 0)
+	if roundBlocks, exists := ds.roundBlocks[round]; exists {
+		blocks = append(blocks, roundBlocks...)
+	}
+	return blocks
+}
+
+// GetRecentBlocks returns recent blocks from the DAG
+func (ds *DAGSync) GetRecentBlocks(count int) []*types.Block {
+	return ds.dag.GetRecentBlocks(count)
+}
+
+// GetDAG returns the underlying DAG for read access
+func (ds *DAGSync) GetDAG() *DAG {
+	return ds.dag
+}
+
+// GetValidatorID returns the validator ID
+func (ds *DAGSync) GetValidatorID() types.Address {
+	return ds.validatorID
+}
+
+// startHTTPServer starts the HTTP API server
+func (ds *DAGSync) startHTTPServer() error {
+	mux := http.NewServeMux()
+	
+	// Register API routes
+	mux.HandleFunc("/", ds.handleRoot)
+	mux.HandleFunc("/blocks", ds.handleGetBlocks)
+	mux.HandleFunc("/status", ds.handleGetStatus)
+	
+	ds.httpServer = &http.Server{
+		Addr:    ds.httpAddr,
+		Handler: mux,
+	}
+	
+	go func() {
+		if err := ds.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("DAG Sync [%s]: HTTP server error: %v", ds.validatorID, err)
+		}
+	}()
+	
+	return nil
+}
+
+// handleRoot handles the root endpoint
+func (ds *DAGSync) handleRoot(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":     "ok",
+		"message":    "BlazeDAG DAG Sync API",
+		"validator":  string(ds.validatorID),
+		"listen":     ds.listenAddr,
+		"http":       ds.httpAddr,
+	})
+}
+
+// handleGetBlocks handles the blocks endpoint
+func (ds *DAGSync) handleGetBlocks(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	// Get count parameter (default to 10)
+	countStr := r.URL.Query().Get("count")
+	count := 10
+	if countStr != "" {
+		var err error
+		count, err = strconv.Atoi(countStr)
+		if err != nil || count <= 0 {
+			http.Error(w, "Invalid count parameter", http.StatusBadRequest)
+			return
+		}
+	}
+	
+	// Get recent blocks from DAG
+	blocks := ds.GetRecentBlocks(count)
+	
+	// Create response
+	response := make([]map[string]interface{}, 0, len(blocks))
+	for _, block := range blocks {
+		blockHash := block.ComputeHash()
+		blockMap := map[string]interface{}{
+			"hash":      fmt.Sprintf("%x", blockHash),
+			"validator": string(block.Header.Validator),
+			"timestamp": block.Header.Timestamp,
+			"round":     block.Header.Round,
+			"wave":      block.Header.Wave,
+			"height":    block.Header.Height,
+			"txCount":   len(block.Body.Transactions),
+		}
+		response = append(response, blockMap)
+	}
+	
+	json.NewEncoder(w).Encode(response)
+}
+
+// handleGetStatus handles the status endpoint
+func (ds *DAGSync) handleGetStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	status := ds.GetDAGStatus()
+	json.NewEncoder(w).Encode(status)
 } 
