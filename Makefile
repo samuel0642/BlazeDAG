@@ -41,7 +41,7 @@ demo-separation:
 # ===== DAG SYNC TARGETS =====
 
 # Build the DAG sync binary
-build-dagsync:
+dag:
 	@echo "Building DAG sync..."
 	go build -o dagsync ./cmd/dagsync
 	@echo "DAG sync built successfully!"
@@ -106,7 +106,7 @@ build-combined:
 	@echo "Combined binary built successfully!"
 
 # Build the wave-only binary
-build-wave:
+wave:
 	@echo "Building wave consensus only..."
 	go build -o wave-consensus ./cmd/wave
 	@echo "Wave consensus binary built successfully!"

@@ -112,11 +112,20 @@ func (wc *WaveConsensus) Start() error {
 	// Connect to peers
 	go wc.connectToPeers()
 	
-	// Start wave ticker
+	// Wait for all peers to connect before starting waves
+	if len(wc.peers) > 0 {
+		log.Printf("Wave Consensus [%s]: Waiting for all %d peers to connect...", wc.validatorID, len(wc.peers))
+		wc.waitForAllPeers()
+		log.Printf("Wave Consensus [%s]: ✅ All peers connected! Starting synchronized waves...", wc.validatorID)
+	} else {
+		log.Printf("Wave Consensus [%s]: No peers configured, starting immediately", wc.validatorID)
+	}
+	
+	// Start wave ticker AFTER all peers are connected
 	wc.waveTicker = time.NewTicker(wc.waveDuration)
 	go wc.runWaves()
 	
-	log.Printf("Wave Consensus [%s]: Started at %s, connecting to %d peers", 
+	log.Printf("Wave Consensus [%s]: Started at %s, connected to %d peers", 
 		wc.validatorID, wc.listenAddr, len(wc.peers))
 	log.Printf("Wave Consensus [%s]: HTTP API available at http://%s", wc.validatorID, wc.httpAddr)
 	
@@ -586,4 +595,26 @@ func (wc *WaveConsensus) handleWaveStatus(w http.ResponseWriter, r *http.Request
 func (wc *WaveConsensus) handleCurrentWave(w http.ResponseWriter, r *http.Request) {
 	currentWave := wc.GetCurrentWave()
 	json.NewEncoder(w).Encode(currentWave)
+}
+
+// waitForAllPeers waits for all peers to connect before starting waves
+func (wc *WaveConsensus) waitForAllPeers() {
+	for {
+		select {
+		case <-wc.ctx.Done():
+			return
+		default:
+			wc.connMu.RLock()
+			connectedPeers := len(wc.connections)
+			wc.connMu.RUnlock()
+			
+			if connectedPeers >= len(wc.peers) {
+				return
+			}
+			
+			log.Printf("Wave Consensus [%s]: Connected to %d/%d peers, waiting...", 
+				wc.validatorID, connectedPeers, len(wc.peers))
+			time.Sleep(1 * time.Second)
+		}
+	}
 } 

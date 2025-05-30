@@ -97,11 +97,20 @@ func (ds *DAGSync) Start() error {
 	// Connect to peers
 	go ds.connectToPeers()
 	
-	// Start round ticker
+	// Wait for all peers to connect before starting rounds
+	if len(ds.peers) > 0 {
+		log.Printf("DAG Sync [%s]: Waiting for all %d peers to connect...", ds.validatorID, len(ds.peers))
+		ds.waitForAllPeers()
+		log.Printf("DAG Sync [%s]: ✅ All peers connected! Starting synchronized rounds...", ds.validatorID)
+	} else {
+		log.Printf("DAG Sync [%s]: No peers configured, starting immediately", ds.validatorID)
+	}
+	
+	// Start round ticker AFTER all peers are connected
 	ds.roundTicker = time.NewTicker(ds.roundDuration)
 	go ds.runRounds()
 	
-	log.Printf("DAG Sync [%s]: Started at %s, connecting to %d peers", 
+	log.Printf("DAG Sync [%s]: Started at %s, connected to %d peers", 
 		ds.validatorID, ds.listenAddr, len(ds.peers))
 	log.Printf("DAG Sync [%s]: HTTP API available at http://%s", ds.validatorID, ds.httpAddr)
 	
@@ -777,4 +786,21 @@ func (ds *DAGSync) handleGetConsensusWave(w http.ResponseWriter, r *http.Request
 	}
 	
 	json.NewEncoder(w).Encode(waveInfo)
+}
+
+// waitForAllPeers waits for all peers to connect before starting rounds
+func (ds *DAGSync) waitForAllPeers() {
+	for {
+		ds.connMu.RLock()
+		connectedPeers := len(ds.connections)
+		ds.connMu.RUnlock()
+		
+		if connectedPeers >= len(ds.peers) {
+			return
+		}
+		
+		log.Printf("DAG Sync [%s]: Connected to %d/%d peers, waiting...", 
+			ds.validatorID, connectedPeers, len(ds.peers))
+		time.Sleep(1 * time.Second)
+	}
 } 
