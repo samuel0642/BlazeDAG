@@ -79,6 +79,10 @@ func NewWaveConsensus(validatorID types.Address, validators []types.Address, dag
 	host, _, _ := net.SplitHostPort(listenAddr)
 	httpAddr := fmt.Sprintf("%s:8081", host) // Wave consensus HTTP API on port 8081
 	
+	log.Printf("🔧 Creating WaveConsensus for validator: %s", validatorID)
+	log.Printf("🔧 Validators list: %v", validators)
+	log.Printf("🔧 Total validators: %d", len(validators))
+	
 	return &WaveConsensus{
 		validatorID:    validatorID,
 		validators:     validators,
@@ -281,19 +285,32 @@ func (wc *WaveConsensus) advanceWave() {
 // isWaveLeader checks if this validator is the leader for the given wave
 func (wc *WaveConsensus) isWaveLeader(wave types.Wave) bool {
 	if len(wc.validators) == 0 {
+		log.Printf("🔧 DEBUG: No validators configured, defaulting to leader (single validator mode)")
 		return true // Single validator mode - always leader
 	}
 	leaderIndex := int(wave) % len(wc.validators)
-	return wc.validators[leaderIndex] == wc.validatorID
+	currentLeader := wc.validators[leaderIndex]
+	isLeader := currentLeader == wc.validatorID
+	
+	log.Printf("🔧 DEBUG: Wave %d, leaderIndex: %d, currentLeader: %s, myID: %s, isLeader: %t", 
+		wave, leaderIndex, currentLeader, wc.validatorID, isLeader)
+	
+	return isLeader
 }
 
 // getWaveLeader returns the leader for the given wave
 func (wc *WaveConsensus) getWaveLeader(wave types.Wave) types.Address {
 	if len(wc.validators) == 0 {
+		log.Printf("🔧 DEBUG: No validators configured, returning own ID as leader")
 		return wc.validatorID // Single validator mode
 	}
 	leaderIndex := int(wave) % len(wc.validators)
-	return wc.validators[leaderIndex]
+	leader := wc.validators[leaderIndex]
+	
+	log.Printf("🔧 DEBUG: Wave %d leader calculation: leaderIndex=%d, leader=%s, validators=%v", 
+		wave, leaderIndex, leader, wc.validators)
+	
+	return leader
 }
 
 // isValidWaveLeader validates if the given validator is the correct leader for the wave
