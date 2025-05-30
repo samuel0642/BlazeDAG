@@ -187,7 +187,7 @@ func main() {
 	waveListenAddr := flag.String("wave-listen", "localhost:6001", "Wave consensus listen address")
 	wavePeersStr := flag.String("wave-peers", "", "Comma-separated wave consensus peer addresses")
 	validatorsStr := flag.String("validators", "", "Comma-separated list of all validators for leader selection")
-	waveDuration := flag.Duration("wave-duration", 4*time.Second, "Wave duration for consensus")
+	waveDuration := flag.Duration("wave-duration", 1*time.Second, "Wave duration for consensus")
 	flag.Parse()
 
 	// Parse wave peers
