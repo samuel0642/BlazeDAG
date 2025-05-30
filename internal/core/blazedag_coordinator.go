@@ -46,7 +46,6 @@ func NewBlazeDagCoordinator(config *Config, storage *storage.Storage) *BlazeDagC
 	validators := []types.Address{
 		types.Address("validator1"),
 		types.Address("validator2"),
-		types.Address("validator3"),
 	}
 	
 	// Create independent wave consensus
