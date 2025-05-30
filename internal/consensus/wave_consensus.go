@@ -304,16 +304,26 @@ func (wc *WaveConsensus) voteOnBlock(wave types.Wave, block *types.Block) {
 	// In real implementation, this would validate the block
 	voteType := "commit"
 	
+	// Use original hash if available (from DAG sync), otherwise compute hash
+	var blockHash []byte
+	if len(block.OriginalHash) > 0 {
+		blockHash = block.OriginalHash
+		log.Printf("Wave Consensus [%s]: Using original hash for voting: %x", wc.validatorID, blockHash[:8])
+	} else {
+		blockHash = block.ComputeHash()
+		log.Printf("Wave Consensus [%s]: Computing hash for voting: %x", wc.validatorID, blockHash[:8])
+	}
+	
 	vote := &WaveVote{
 		Wave:      wave,
-		BlockHash: block.ComputeHash(),
+		BlockHash: blockHash,
 		Voter:     wc.validatorID,
 		VoteType:  voteType,
 		Timestamp: time.Now(),
 	}
 	
 	// Store our vote
-	voteKey := fmt.Sprintf("%x", block.ComputeHash())
+	voteKey := fmt.Sprintf("%x", blockHash)
 	wc.mu.Lock()
 	if wc.waveVotes[wave] == nil {
 		wc.waveVotes[wave] = make(map[string]*WaveVote)
@@ -322,7 +332,7 @@ func (wc *WaveConsensus) voteOnBlock(wave types.Wave, block *types.Block) {
 	wc.mu.Unlock()
 	
 	log.Printf("Wave Consensus [%s]: Voted %s for block %x in wave %d", 
-		wc.validatorID, voteType, block.ComputeHash()[:8], wave)
+		wc.validatorID, voteType, blockHash[:8], wave)
 	
 	// Broadcast vote
 	wc.broadcastVote(vote)

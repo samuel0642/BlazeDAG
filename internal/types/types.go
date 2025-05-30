@@ -34,6 +34,7 @@ type Block struct {
 	Body        *BlockBody
 	Certificate *Certificate
 	hash        []byte // cached hash
+	OriginalHash []byte // original hash from DAG sync (for wave consensus)
 }
 
 // BlockHeader represents a block header
