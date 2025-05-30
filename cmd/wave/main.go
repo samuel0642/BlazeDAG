@@ -53,7 +53,7 @@ type BlockResponse struct {
 // GetRecentBlocks returns recent blocks from DAG sync
 func (rds *RemoteDAGSync) GetRecentBlocks(count int) []*types.Block {
 	// Try to connect to DAG sync HTTP API
-	url := fmt.Sprintf("http://%s:5001/blocks?count=%d", 
+	url := fmt.Sprintf("http://%s:8080/blocks?count=%d", 
 		strings.Split(rds.dagAddr, ":")[0], count)
 	
 	resp, err := http.Get(url)
