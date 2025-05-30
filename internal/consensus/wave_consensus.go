@@ -22,6 +22,7 @@ type DAGReader interface {
 // WaveConsensus handles wave-based consensus on blocks from DAG sync
 type WaveConsensus struct {
 	validatorID   types.Address
+	validators    []types.Address  // All validators in the network
 	dagReader     DAGReader     // Interface to read blocks from DAG
 	currentWave   types.Wave
 	waveDuration  time.Duration
@@ -71,7 +72,7 @@ type WaveMessage struct {
 }
 
 // NewWaveConsensus creates a new wave consensus instance
-func NewWaveConsensus(validatorID types.Address, dagReader DAGReader, listenAddr string, peers []string, waveDuration time.Duration) *WaveConsensus {
+func NewWaveConsensus(validatorID types.Address, validators []types.Address, dagReader DAGReader, listenAddr string, peers []string, waveDuration time.Duration) *WaveConsensus {
 	ctx, cancel := context.WithCancel(context.Background())
 	
 	// Set up HTTP API on port 8081 for wave consensus
@@ -80,6 +81,7 @@ func NewWaveConsensus(validatorID types.Address, dagReader DAGReader, listenAddr
 	
 	return &WaveConsensus{
 		validatorID:    validatorID,
+		validators:     validators,
 		dagReader:      dagReader,
 		currentWave:    0,
 		waveDuration:   waveDuration,
@@ -264,23 +266,72 @@ func (wc *WaveConsensus) advanceWave() {
 	currentWave := wc.currentWave
 	wc.mu.Unlock()
 	
-	log.Printf("Wave Consensus [%s]: Advanced to wave %d", wc.validatorID, currentWave)
+	leader := wc.getWaveLeader(currentWave)
+	log.Printf("Wave Consensus [%s]: Advanced to wave %d, Leader: %s", wc.validatorID, currentWave, leader)
 	
-	// Get blocks from DAG sync for this wave
-	go wc.processWave(currentWave)
+	// Only process wave if this validator is the leader
+	if wc.isWaveLeader(currentWave) {
+		log.Printf("Wave Consensus [%s]: 👑 I am the LEADER for wave %d!", wc.validatorID, currentWave)
+		go wc.processWave(currentWave)
+	} else {
+		log.Printf("Wave Consensus [%s]: ⚪ Not leader for wave %d, waiting for leader's proposal...", wc.validatorID, currentWave)
+	}
 }
 
-// processWave processes blocks for the current wave
+// isWaveLeader checks if this validator is the leader for the given wave
+func (wc *WaveConsensus) isWaveLeader(wave types.Wave) bool {
+	if len(wc.validators) == 0 {
+		return true // Single validator mode - always leader
+	}
+	leaderIndex := int(wave) % len(wc.validators)
+	return wc.validators[leaderIndex] == wc.validatorID
+}
+
+// getWaveLeader returns the leader for the given wave
+func (wc *WaveConsensus) getWaveLeader(wave types.Wave) types.Address {
+	if len(wc.validators) == 0 {
+		return wc.validatorID // Single validator mode
+	}
+	leaderIndex := int(wave) % len(wc.validators)
+	return wc.validators[leaderIndex]
+}
+
+// isValidWaveLeader validates if the given validator is the correct leader for the wave
+func (wc *WaveConsensus) isValidWaveLeader(validator types.Address, wave types.Wave) bool {
+	return wc.getWaveLeader(wave) == validator
+}
+
+// processWave processes blocks for the current wave (only called by leader)
 func (wc *WaveConsensus) processWave(wave types.Wave) {
-	// Get blocks from DAG sync - use recent blocks
+	// Double-check that we are the leader
+	if !wc.isWaveLeader(wave) {
+		log.Printf("Wave Consensus [%s]: ❌ processWave called but not leader for wave %d", wc.validatorID, wave)
+		return
+	}
+
+	// Get blocks from DAG sync
 	recentBlocks := wc.dagReader.GetRecentBlocks(20)
 	
-	// Filter blocks that haven't been processed in previous waves
-	newBlocks := make([]*types.Block, 0)
+	// Filter to only get blocks created by this validator (leader's own blocks)
+	var ownBlocks []*types.Block
+	for _, block := range recentBlocks {
+		if block.Header.Validator == wc.validatorID {
+			ownBlocks = append(ownBlocks, block)
+		}
+	}
+
+	if len(ownBlocks) == 0 {
+		log.Printf("Wave Consensus [%s]: 📭 No own blocks found for wave %d", wc.validatorID, wave)
+		return
+	}
+
+	// Find the block with the highest round from own blocks
+	var topRoundBlock *types.Block
+	var highestRound types.Round = 0
 	
 	wc.mu.RLock()
-	for _, block := range recentBlocks {
-		// Check if this block was already processed in a finalized wave
+	for _, block := range ownBlocks {
+		// Check if this block was already processed in previous waves
 		alreadyProcessed := false
 		for finalizedWave := range wc.finalizedWaves {
 			if waveBlocks, exists := wc.waveBlocks[finalizedWave]; exists {
@@ -296,37 +347,40 @@ func (wc *WaveConsensus) processWave(wave types.Wave) {
 			}
 		}
 		
-		if !alreadyProcessed {
-			// Update the block's wave field for consensus
-			block.Header.Wave = wave
-			newBlocks = append(newBlocks, block)
+		// Select the highest round block that hasn't been processed
+		if !alreadyProcessed && block.Header.Round >= highestRound {
+			highestRound = block.Header.Round
+			topRoundBlock = block
 		}
 	}
 	wc.mu.RUnlock()
-	
-	if len(newBlocks) == 0 {
-		log.Printf("Wave Consensus [%s]: No new blocks for wave %d", wc.validatorID, wave)
+
+	if topRoundBlock == nil {
+		log.Printf("Wave Consensus [%s]: 📭 No unprocessed own blocks for wave %d", wc.validatorID, wave)
 		return
 	}
-	
-	// Store blocks for this wave
+
+	// Update the wave field for the selected block
+	topRoundBlock.Header.Wave = wave
+
+	// Store the selected block for this wave
 	wc.mu.Lock()
-	wc.waveBlocks[wave] = newBlocks
+	wc.waveBlocks[wave] = []*types.Block{topRoundBlock} // Only one block per wave
 	if wc.waveVotes[wave] == nil {
 		wc.waveVotes[wave] = make(map[string]*WaveVote)
 	}
 	wc.mu.Unlock()
-	
-	log.Printf("Wave Consensus [%s]: Processing %d blocks in wave %d", 
-		wc.validatorID, len(newBlocks), wave)
-	
-	// Vote on these blocks
-	for _, block := range newBlocks {
-		wc.voteOnBlock(wave, block)
-	}
-	
-	// Broadcast blocks to other validators
-	wc.broadcastWaveBlocks(wave, newBlocks)
+
+	log.Printf("Wave Consensus [%s]: 🚀 LEADER selected TOP ROUND block for wave %d", wc.validatorID, wave)
+	log.Printf("Wave Consensus [%s]: 📦 Block Hash: %x", wc.validatorID, topRoundBlock.ComputeHash()[:8])
+	log.Printf("Wave Consensus [%s]: 🔄 Round: %d", wc.validatorID, topRoundBlock.Header.Round)
+	log.Printf("Wave Consensus [%s]: 📏 Height: %d", wc.validatorID, topRoundBlock.Header.Height)
+
+	// Leader votes on their own block first
+	wc.voteOnBlock(wave, topRoundBlock)
+
+	// Broadcast the selected block to other validators
+	wc.broadcastWaveBlocks(wave, []*types.Block{topRoundBlock})
 }
 
 // voteOnBlock votes on a block in the current wave
@@ -443,6 +497,20 @@ func (wc *WaveConsensus) handleReceivedVote(vote *WaveVote, fromValidator types.
 		return
 	}
 	
+	// Validate that the voter is in our validator set
+	validVoter := false
+	for _, validator := range wc.validators {
+		if validator == vote.Voter {
+			validVoter = true
+			break
+		}
+	}
+	
+	if !validVoter {
+		log.Printf("Wave Consensus [%s]: ❌ Rejected vote from invalid validator %s", wc.validatorID, vote.Voter)
+		return
+	}
+	
 	wc.mu.Lock()
 	if wc.waveVotes[vote.Wave] == nil {
 		wc.waveVotes[vote.Wave] = make(map[string]*WaveVote)
@@ -454,8 +522,8 @@ func (wc *WaveConsensus) handleReceivedVote(vote *WaveVote, fromValidator types.
 	wc.waveVotes[vote.Wave][voterKey] = vote
 	wc.mu.Unlock()
 	
-	log.Printf("Wave Consensus [%s]: Received %s vote from %s for block %x in wave %d", 
-		wc.validatorID, vote.VoteType, fromValidator, vote.BlockHash[:8], vote.Wave)
+	log.Printf("Wave Consensus [%s]: ✅ Received %s vote from validator %s for block %x in wave %d", 
+		wc.validatorID, vote.VoteType, vote.Voter, vote.BlockHash[:8], vote.Wave)
 	
 	// Check if this enables finalization
 	go wc.checkWaveFinalization(vote.Wave)
@@ -467,11 +535,29 @@ func (wc *WaveConsensus) handleReceivedWaveBlocks(wave types.Wave, blocks []*typ
 		return
 	}
 	
-	log.Printf("Wave Consensus [%s]: Received %d blocks from %s for wave %d", 
+	// Validate that the sender is the correct leader for this wave
+	if !wc.isValidWaveLeader(fromValidator, wave) {
+		log.Printf("Wave Consensus [%s]: ❌ Rejected blocks from %s - not valid leader for wave %d", 
+			wc.validatorID, fromValidator, wave)
+		return
+	}
+
+	log.Printf("Wave Consensus [%s]: ✅ Received %d blocks from VALID LEADER %s for wave %d", 
 		wc.validatorID, len(blocks), fromValidator, wave)
 	
-	// Vote on received blocks
+	// Validate that all blocks in the proposal were created by the leader
 	for _, block := range blocks {
+		if block.Header.Validator != fromValidator {
+			log.Printf("Wave Consensus [%s]: ❌ Rejected block %x - not created by leader %s", 
+				wc.validatorID, block.ComputeHash()[:8], fromValidator)
+			return
+		}
+	}
+
+	// Vote on received blocks from valid leader
+	for _, block := range blocks {
+		log.Printf("Wave Consensus [%s]: 🗳️ Voting on leader's block %x in wave %d", 
+			wc.validatorID, block.ComputeHash()[:8], wave)
 		wc.voteOnBlock(wave, block)
 	}
 }
@@ -503,7 +589,7 @@ func (wc *WaveConsensus) checkWaveFinalization(wave types.Wave) {
 	}
 	
 	// Check if any block has enough votes to finalize (simple majority)
-	totalValidators := len(wc.peers) + 1 // peers + self
+	totalValidators := len(wc.validators)
 	requiredVotes := (totalValidators / 2) + 1
 	
 	finalizedBlocks := 0
@@ -517,7 +603,7 @@ func (wc *WaveConsensus) checkWaveFinalization(wave types.Wave) {
 		
 		if commitVotes >= requiredVotes {
 			finalizedBlocks++
-			log.Printf("Wave Consensus [%s]: Block %s finalized in wave %d with %d/%d votes", 
+			log.Printf("Wave Consensus [%s]: 🎉 Block %s finalized in wave %d with %d/%d votes", 
 				wc.validatorID, blockKey[:16], wave, commitVotes, totalValidators)
 		}
 	}
@@ -548,9 +634,16 @@ func (wc *WaveConsensus) GetWaveStatus() map[string]interface{} {
 	connectedPeers := len(wc.connections)
 	wc.connMu.RUnlock()
 	
+	// Get current wave leader info
+	currentLeader := wc.getWaveLeader(wc.currentWave)
+	isCurrentLeader := wc.isWaveLeader(wc.currentWave)
+	
 	return map[string]interface{}{
 		"validator_id":      wc.validatorID,
 		"current_wave":      wc.currentWave,
+		"current_leader":    currentLeader,
+		"is_current_leader": isCurrentLeader,
+		"validators":        wc.validators,
 		"finalized_waves":   finalizedCount,
 		"connected_peers":   connectedPeers,
 		"votes_per_wave":    waveVoteCounts,

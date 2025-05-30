@@ -186,6 +186,7 @@ func main() {
 	dagAddr := flag.String("dag-addr", "localhost:4001", "DAG sync address to connect to")
 	waveListenAddr := flag.String("wave-listen", "localhost:6001", "Wave consensus listen address")
 	wavePeersStr := flag.String("wave-peers", "", "Comma-separated wave consensus peer addresses")
+	validatorsStr := flag.String("validators", "", "Comma-separated list of all validators for leader selection")
 	waveDuration := flag.Duration("wave-duration", 4*time.Second, "Wave duration for consensus")
 	flag.Parse()
 
@@ -196,6 +197,18 @@ func main() {
 		for i, peer := range wavePeers {
 			wavePeers[i] = strings.TrimSpace(peer)
 		}
+	}
+
+	// Parse validators list
+	var validators []types.Address
+	if *validatorsStr != "" {
+		validatorStrs := strings.Split(*validatorsStr, ",")
+		for _, validatorStr := range validatorStrs {
+			validators = append(validators, types.Address(strings.TrimSpace(validatorStr)))
+		}
+	} else {
+		// Default: single validator mode
+		validators = []types.Address{types.Address(*validatorID)}
 	}
 
 	// Check if DAG sync is reachable
@@ -214,6 +227,7 @@ func main() {
 	// Create wave consensus
 	waveConsensus := consensus.NewWaveConsensus(
 		types.Address(*validatorID),
+		validators,
 		remoteDAG, // Use remote DAG interface
 		*waveListenAddr,
 		wavePeers,
@@ -237,6 +251,7 @@ func main() {
 
 	fmt.Printf("=== Wave Consensus Only Started ===\n")
 	fmt.Printf("Validator: %s\n", *validatorID)
+	fmt.Printf("Validators: %v\n", validators)
 	fmt.Printf("DAG Source: %s\n", *dagAddr)
 	fmt.Printf("Wave Listen: %s\n", *waveListenAddr)
 	if len(wavePeers) > 0 {
@@ -259,9 +274,18 @@ func main() {
 			case <-ticker.C:
 				waveStatus := waveConsensus.GetWaveStatus()
 				
+				leaderSymbol := "⚪"
+				if waveStatus["is_current_leader"].(bool) {
+					leaderSymbol = "👑"
+				}
+				
 				fmt.Printf("\n=== Wave Status [%s] ===\n", time.Now().Format("15:04:05"))
-				fmt.Printf("Wave: %d, Finalized: %d, Peers: %d\n", 
-					waveStatus["current_wave"], waveStatus["finalized_waves"], waveStatus["connected_peers"])
+				fmt.Printf("Wave: %d, Leader: %s %s, Finalized: %d, Peers: %d\n", 
+					waveStatus["current_wave"], 
+					waveStatus["current_leader"], 
+					leaderSymbol,
+					waveStatus["finalized_waves"], 
+					waveStatus["connected_peers"])
 				fmt.Printf("========================\n")
 			}
 		}
