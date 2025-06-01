@@ -695,6 +695,8 @@ func (wc *WaveConsensus) startHTTPServer() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/wave_status", wc.handleWaveStatus)
 	mux.HandleFunc("/current_wave", wc.handleCurrentWave)
+	mux.HandleFunc("/block_confirmation", wc.handleBlockConfirmation)
+	mux.HandleFunc("/all_blocks_confirmation", wc.handleAllBlocksConfirmation)
 	
 	wc.httpServer = &http.Server{
 		Addr:    wc.httpAddr,
@@ -742,4 +744,204 @@ func (wc *WaveConsensus) waitForAllPeers() {
 			time.Sleep(1 * time.Second)
 		}
 	}
+}
+
+// GetBlockConfirmationStatus returns detailed block confirmation status
+func (wc *WaveConsensus) GetBlockConfirmationStatus(blockHash string) map[string]interface{} {
+	wc.mu.RLock()
+	defer wc.mu.RUnlock()
+	
+	// Find which wave this block belongs to
+	var blockWave types.Wave = 0
+	var found bool
+	
+	for wave, blocks := range wc.waveBlocks {
+		for _, block := range blocks {
+			if fmt.Sprintf("%x", block.ComputeHash()) == blockHash || 
+			   fmt.Sprintf("%x", block.OriginalHash) == blockHash {
+				blockWave = wave
+				found = true
+				break
+			}
+		}
+		if found {
+			break
+		}
+	}
+	
+	if !found {
+		return map[string]interface{}{
+			"block_hash": blockHash,
+			"status": "not_found",
+			"message": "Block not found in wave consensus",
+		}
+	}
+	
+	// Check if wave is finalized
+	isFinalized := wc.finalizedWaves[blockWave]
+	
+	// Count votes for this block
+	waveVotes := wc.waveVotes[blockWave]
+	blockVotes := 0
+	commitVotes := 0
+	
+	if waveVotes != nil {
+		for _, vote := range waveVotes {
+			if fmt.Sprintf("%x", vote.BlockHash) == blockHash {
+				blockVotes++
+				if vote.VoteType == "commit" {
+					commitVotes++
+				}
+			}
+		}
+	}
+	
+	totalValidators := len(wc.validators)
+	requiredVotes := (totalValidators / 2) + 1
+	
+	// Determine status
+	var status string
+	var message string
+	
+	if isFinalized {
+		status = "finalized"
+		message = fmt.Sprintf("Block finalized in wave %d", blockWave)
+	} else if blockWave > wc.currentWave {
+		status = "pending"
+		message = fmt.Sprintf("Block scheduled for future wave %d", blockWave)
+	} else if commitVotes >= requiredVotes {
+		status = "confirming"
+		message = fmt.Sprintf("Block has sufficient votes, awaiting wave finalization")
+	} else if blockVotes > 0 {
+		status = "voting"
+		message = fmt.Sprintf("Block is being voted on (%d/%d votes)", commitVotes, totalValidators)
+	} else {
+		status = "proposed"
+		message = fmt.Sprintf("Block proposed in wave %d, awaiting votes", blockWave)
+	}
+	
+	return map[string]interface{}{
+		"block_hash": blockHash,
+		"wave": blockWave,
+		"status": status,
+		"message": message,
+		"is_finalized": isFinalized,
+		"votes": map[string]interface{}{
+			"commit_votes": commitVotes,
+			"total_votes": blockVotes,
+			"required_votes": requiredVotes,
+			"total_validators": totalValidators,
+		},
+		"current_wave": wc.currentWave,
+	}
+}
+
+// GetAllBlocksConfirmationStatus returns confirmation status for all blocks
+func (wc *WaveConsensus) GetAllBlocksConfirmationStatus() map[string]interface{} {
+	wc.mu.RLock()
+	defer wc.mu.RUnlock()
+	
+	blockStatuses := make(map[string]interface{})
+	
+	// Process all blocks in all waves
+	for wave, blocks := range wc.waveBlocks {
+		for _, block := range blocks {
+			blockHash := fmt.Sprintf("%x", block.ComputeHash())
+			if len(block.OriginalHash) > 0 {
+				blockHash = fmt.Sprintf("%x", block.OriginalHash)
+			}
+			
+			// Check if wave is finalized
+			isFinalized := wc.finalizedWaves[wave]
+			
+			// Count votes for this block
+			waveVotes := wc.waveVotes[wave]
+			blockVotes := 0
+			commitVotes := 0
+			
+			if waveVotes != nil {
+				for _, vote := range waveVotes {
+					if fmt.Sprintf("%x", vote.BlockHash) == blockHash {
+						blockVotes++
+						if vote.VoteType == "commit" {
+							commitVotes++
+						}
+					}
+				}
+			}
+			
+			totalValidators := len(wc.validators)
+			requiredVotes := (totalValidators / 2) + 1
+			
+			// Determine status
+			var status string
+			
+			if isFinalized {
+				status = "finalized"
+			} else if wave > wc.currentWave {
+				status = "pending"
+			} else if commitVotes >= requiredVotes {
+				status = "confirming"
+			} else if blockVotes > 0 {
+				status = "voting"
+			} else {
+				status = "proposed"
+			}
+			
+			blockStatuses[blockHash] = map[string]interface{}{
+				"wave": wave,
+				"status": status,
+				"is_finalized": isFinalized,
+				"commit_votes": commitVotes,
+				"total_votes": blockVotes,
+				"required_votes": requiredVotes,
+				"total_validators": totalValidators,
+			}
+		}
+	}
+	
+	return map[string]interface{}{
+		"current_wave": wc.currentWave,
+		"total_finalized_waves": len(wc.finalizedWaves),
+		"blocks": blockStatuses,
+	}
+}
+
+// handleBlockConfirmation handles the /block_confirmation API endpoint
+func (wc *WaveConsensus) handleBlockConfirmation(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	
+	blockHash := r.URL.Query().Get("hash")
+	if blockHash == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "block hash parameter required"})
+		return
+	}
+	
+	status := wc.GetBlockConfirmationStatus(blockHash)
+	json.NewEncoder(w).Encode(status)
+}
+
+// handleAllBlocksConfirmation handles the /all_blocks_confirmation API endpoint
+func (wc *WaveConsensus) handleAllBlocksConfirmation(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	
+	status := wc.GetAllBlocksConfirmationStatus()
+	json.NewEncoder(w).Encode(status)
 } 
