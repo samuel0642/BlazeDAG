@@ -74,18 +74,18 @@ func (rds *RemoteDAGSync) GetRecentBlocks(count int) []*types.Block {
 		return rds.getFallbackBlocks()
 	}
 	
-	log.Printf("Wave Consensus: Received %d blocks from DAG sync", len(blockResponses))
+	// log.Printf("Wave Consensus: Received %d blocks from DAG sync", len(blockResponses))
 	
-	// Log details of received blocks from HTTP API
-	log.Printf("🌊 Wave Consensus: RECEIVED BLOCKS from DAG API:")
-	for i, blockResp := range blockResponses {
-		log.Printf("   [%d] 📦 Hash: %s", i+1, blockResp.Hash)
-		log.Printf("   [%d] 🔄 Round: %d", i+1, blockResp.Round)
-		log.Printf("   [%d] 📏 Height: %d", i+1, blockResp.Height)
-		log.Printf("   [%d] 👤 Validator: %s", i+1, blockResp.Validator)
-		log.Printf("   [%d] 💼 TxCount: %d", i+1, blockResp.TxCount)
-		log.Printf("   [%d] ⏰ Timestamp: %s", i+1, blockResp.Timestamp.Format("15:04:05"))
-	}
+	// // Log details of received blocks from HTTP API
+	// log.Printf("🌊 Wave Consensus: RECEIVED BLOCKS from DAG API:")
+	// for i, blockResp := range blockResponses {
+	// 	log.Printf("   [%d] 📦 Hash: %s", i+1, blockResp.Hash)
+	// 	log.Printf("   [%d] 🔄 Round: %d", i+1, blockResp.Round)
+	// 	log.Printf("   [%d] 📏 Height: %d", i+1, blockResp.Height)
+	// 	log.Printf("   [%d] 👤 Validator: %s", i+1, blockResp.Validator)
+	// 	log.Printf("   [%d] 💼 TxCount: %d", i+1, blockResp.TxCount)
+	// 	log.Printf("   [%d] ⏰ Timestamp: %s", i+1, blockResp.Timestamp.Format("15:04:05"))
+	// }
 	
 	// Convert HTTP response to lightweight block format that preserves original hash
 	blocks := make([]*types.Block, 0, len(blockResponses))
@@ -116,10 +116,10 @@ func (rds *RemoteDAGSync) GetRecentBlocks(count int) []*types.Block {
 			OriginalHash: originalHashBytes, // Store the original hash
 		}
 		
-		log.Printf("✅ Wave Consensus: PRESERVED ORIGINAL HASH [%d]:", i+1)
-		log.Printf("   📦 Original Hash: %s", blockResp.Hash)
-		log.Printf("   📦 Preserved Hash: %x", originalHashBytes)
-		log.Printf("   ✅ Hash Match: %t", true) // Always true now since we preserve the original
+		// log.Printf("✅ Wave Consensus: PRESERVED ORIGINAL HASH [%d]:", i+1)
+		// log.Printf("   📦 Original Hash: %s", blockResp.Hash)
+		// log.Printf("   📦 Preserved Hash: %x", originalHashBytes)
+		// log.Printf("   ✅ Hash Match: %t", true) // Always true now since we preserve the original
 		
 		blocks = append(blocks, block)
 	}
