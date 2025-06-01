@@ -89,7 +89,7 @@ func (rds *RemoteDAGSync) GetRecentBlocks(count int) []*types.Block {
 	
 	// Convert HTTP response to lightweight block format that preserves original hash
 	blocks := make([]*types.Block, 0, len(blockResponses))
-	for i, blockResp := range blockResponses {
+	for _, blockResp := range blockResponses {
 		// Parse the original hash from hex string
 		originalHashBytes, err := hex.DecodeString(blockResp.Hash)
 		if err != nil {
@@ -120,7 +120,8 @@ func (rds *RemoteDAGSync) GetRecentBlocks(count int) []*types.Block {
 		// log.Printf("   📦 Original Hash: %s", blockResp.Hash)
 		// log.Printf("   📦 Preserved Hash: %x", originalHashBytes)
 		// log.Printf("   ✅ Hash Match: %t", true) // Always true now since we preserve the original
-		
+
+
 		blocks = append(blocks, block)
 	}
 	
@@ -186,7 +187,7 @@ func main() {
 	dagAddr := flag.String("dag-addr", "localhost:4001", "DAG sync address to connect to")
 	waveListenAddr := flag.String("wave-listen", "localhost:6001", "Wave consensus listen address")
 	wavePeersStr := flag.String("wave-peers", "", "Comma-separated wave consensus peer addresses")
-	validatorsStr := flag.String("validators", "", "Comma-separated list of all validators for leader selection")
+	// validatorsStr := flag.String("validators", "", "Comma-separated list of all validators for leader selection")
 	waveDuration := flag.Duration("wave-duration", 1*time.Second, "Wave duration for consensus")
 	flag.Parse()
 
@@ -199,7 +200,20 @@ func main() {
 		}
 	}
 
-	// Parse validators list
+	// Parse validators list - HARDCODED VALIDATOR SET
+	// Always use the complete validator set regardless of CLI input
+	validators := []types.Address{
+		types.Address("validator1"),
+		types.Address("validator2"),
+		// types.Address("validator3"),  // Uncomment to add more validators
+		// types.Address("validator4"),  // Uncomment to add more validators
+	}
+	
+	log.Printf("🔧 HARDCODED: Using fixed validator set: %v", validators)
+	log.Printf("🔧 HARDCODED: Total validators in network: %d", len(validators))
+	
+	// Original CLI parsing (commented out for reference)
+	/*
 	var validators []types.Address
 	if *validatorsStr != "" {
 		validatorStrs := strings.Split(*validatorsStr, ",")
@@ -210,6 +224,7 @@ func main() {
 		// Default: single validator mode
 		validators = []types.Address{types.Address(*validatorID)}
 	}
+	*/
 
 	// Check if DAG sync is reachable
 	conn, err := net.DialTimeout("tcp", *dagAddr, 2*time.Second)

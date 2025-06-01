@@ -266,6 +266,14 @@ func (wc *WaveConsensus) runWaves() {
 // advanceWave advances to the next wave
 func (wc *WaveConsensus) advanceWave() {
 	wc.mu.Lock()
+	
+	// Check if previous wave is finalized before advancing
+	if wc.currentWave > 0 && !wc.finalizedWaves[wc.currentWave] {
+		log.Printf("Wave Consensus [%s]: ⏳ Waiting for wave %d to finalize before advancing", wc.validatorID, wc.currentWave)
+		wc.mu.Unlock()
+		return
+	}
+	
 	wc.currentWave++
 	currentWave := wc.currentWave
 	wc.mu.Unlock()
@@ -373,7 +381,14 @@ func (wc *WaveConsensus) processWave(wave types.Wave) {
 	wc.mu.RUnlock()
 
 	if topRoundBlock == nil {
-		log.Printf("Wave Consensus [%s]: 📭 No unprocessed own blocks for wave %d", wc.validatorID, wave)
+		log.Printf("Wave Consensus [%s]: 📭 No unprocessed own blocks for wave %d - finalizing empty wave", wc.validatorID, wave)
+		
+		// For empty waves, immediately mark as finalized to maintain sequential progression
+		wc.mu.Lock()
+		wc.finalizedWaves[wave] = true
+		wc.mu.Unlock()
+		
+		log.Printf("Wave Consensus [%s]: ✅ Wave %d FINALIZED (empty wave)", wc.validatorID, wave)
 		return
 	}
 
