@@ -1,0 +1,616 @@
+nohup: ignoring input
+2025/06/02 00:38:43 🔧 HARDCODED: Using fixed validator set: [validator1 validator2]
+2025/06/02 00:38:43 🔧 HARDCODED: Total validators in network: 2
+2025/06/02 00:38:43 Connected to DAG sync at localhost:4001
+2025/06/02 00:38:43 🔧 Creating WaveConsensus for validator: validator1
+2025/06/02 00:38:43 🔧 Validators list: [validator1 validator2]
+2025/06/02 00:38:43 🔧 Total validators: 2
+2025/06/02 00:38:43 Wave Consensus [validator1]: Starting wave consensus
+2025/06/02 00:38:43 Wave Consensus [validator1]: Waiting for all 1 peers to connect...
+2025/06/02 00:38:43 Wave Consensus [validator1]: Connected to 0/1 peers, waiting...
+2025/06/02 00:38:43 Wave Consensus [validator1]: Connected to peer 13.52.213.240:6001
+2025/06/02 00:38:44 Wave Consensus [validator1]: ✅ All peers connected! Starting synchronized waves...
+2025/06/02 00:38:44 Wave Consensus [validator1]: Started at 0.0.0.0:6001, connected to 1 peers
+2025/06/02 00:38:44 Wave Consensus [validator1]: HTTP API available at http://0.0.0.0:8081
+=== Wave Consensus Only Started ===
+Validator: validator1
+Validators: [validator1 validator2]
+DAG Source: localhost:4001
+Wave Listen: 0.0.0.0:6001
+Wave Peers: [13.52.213.240:6001]
+Wave Duration: 1s
+===================================
+2025/06/02 00:38:45 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:38:45 Wave Consensus [validator1]: Advanced to wave 1, Leader: validator2
+2025/06/02 00:38:45 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+2025/06/02 00:38:45 Wave Consensus [validator1]: ⚪ Not leader for wave 1, waiting for leader's proposal...
+2025/06/02 00:38:46 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:38:47 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:38:48 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:38:49 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:38:50 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:38:51 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:38:52 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:38:52 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:38:52 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:38:52] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:38:53 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:38:54 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:38:55 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:38:56 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:38:57 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:38:58 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:38:59 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:00 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:00 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:39:00 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:39:00] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:39:01 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:02 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:03 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:04 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:05 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:06 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:07 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:08 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:08 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:39:08 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:39:08] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:39:09 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:10 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:11 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:12 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:13 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:14 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:15 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:16 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:39:16 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+2025/06/02 00:39:16 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+
+=== Wave Status [00:39:16] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:39:17 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:18 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:19 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:20 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:21 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:22 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:23 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:24 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:39:24 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:39:24] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:39:24 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:25 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:26 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:27 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:28 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:29 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:30 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:31 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:32 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:32 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:39:32 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:39:32] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:39:33 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:34 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:35 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:36 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:37 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:38 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:39 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:40 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:39:40 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:39:40] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:39:40 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:41 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:42 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:43 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:44 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:45 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:46 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:47 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:48 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:39:48 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:39:48] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:39:48 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:49 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:50 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:51 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:52 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:53 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:54 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:55 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:56 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:56 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:39:56 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:39:56] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:39:57 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:58 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:39:59 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:00 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:01 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:02 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:03 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:04 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:40:04 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:40:04] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:40:04 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:05 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:06 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:07 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:08 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:09 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:10 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:11 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:12 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:40:12 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:40:12] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:40:12 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:13 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:14 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:15 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:16 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:17 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:18 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:19 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:20 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:20 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:40:20 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:40:20] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:40:21 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:22 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:23 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:24 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:25 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:26 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:27 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:28 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:40:28 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:40:28] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:40:28 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:29 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:30 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:31 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:32 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:33 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:34 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:35 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:36 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:36 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:40:36 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:40:36] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:40:37 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:38 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:39 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:40 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:41 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:42 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:43 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:44 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:44 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:40:44 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:40:44] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:40:45 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:46 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:47 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:48 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:49 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:50 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:51 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:52 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:52 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:40:52 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:40:52] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:40:53 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:54 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:55 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:56 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:57 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:58 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:40:59 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:00 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:00 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:41:00 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:41:00] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:41:01 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:02 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:03 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:04 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:05 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:06 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:07 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:08 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:41:08 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:41:08] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:41:08 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:09 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:10 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:11 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:12 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:13 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:14 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:15 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:16 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:16 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:41:16 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:41:16] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:41:17 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:18 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:19 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:20 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:21 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:22 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:23 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:24 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:41:24 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:41:24] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:41:24 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:25 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:26 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:27 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:28 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:29 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:30 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:31 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:32 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:32 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:41:32 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:41:32] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:41:33 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:34 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:35 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:36 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:37 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:38 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:39 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:40 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:41:40 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:41:40] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:41:40 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:41 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:42 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:43 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:44 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:45 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:46 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:47 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:48 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:48 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:41:48 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:41:48] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:41:49 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:50 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:51 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:52 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:53 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:54 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:55 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:56 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:41:56 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:41:56] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:41:56 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:57 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:58 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:41:59 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:00 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:01 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:02 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:03 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:04 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:04 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:42:04 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:42:04] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:42:05 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:06 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:07 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:08 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:09 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:10 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:11 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:12 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:42:12 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:42:12] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:42:12 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:13 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:14 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:15 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:16 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:17 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:18 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:19 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:20 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:20 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:42:20 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:42:20] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:42:21 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:22 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:23 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:24 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:25 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:26 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:27 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:28 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:28 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:42:28 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:42:28] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:42:29 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:30 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:31 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:32 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:33 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:34 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:35 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:36 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:36 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:42:36 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:42:36] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:42:37 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:38 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:39 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:40 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:41 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:42 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:43 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:44 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:42:44 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:42:44] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:42:44 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:45 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:46 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:47 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:48 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:49 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:50 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:51 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:52 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:52 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:42:52 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:42:52] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:42:53 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:54 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:55 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:56 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:57 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:58 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:42:59 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:00 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:43:00 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:43:00] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:43:00 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:01 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:02 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:03 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:04 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:05 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:06 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:07 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:08 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:08 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:43:08 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:43:08] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:43:09 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:10 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:11 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:12 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:13 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:14 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:15 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:16 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:43:16 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:43:16] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:43:16 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:17 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:18 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:19 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:20 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:21 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:22 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:23 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:24 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:24 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:43:24 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:43:24] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:43:25 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:26 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:27 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:28 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:29 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:30 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:31 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:32 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:43:32 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:43:32] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:43:32 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:33 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:34 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:35 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:36 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:37 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:38 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:39 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:40 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:40 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:43:40 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:43:40] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:43:41 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:42 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:43 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:44 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:45 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:46 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:47 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:48 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:43:48 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:43:48] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:43:48 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:49 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:50 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:51 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:52 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:53 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:54 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:55 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:56 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/02 00:43:56 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:43:56 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator2, myID: validator1, isLeader: false
+
+=== Wave Status [00:43:56] ===
+Wave: 1, Leader: validator2 ⚪, Finalized: 0, Peers: 1
+========================
+2025/06/02 00:43:57 Wave Consensus [validator1]: ✅ Received commit vote from validator validator2 for block d8f444c517c6e2ef in wave 1
+2025/06/02 00:43:57 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator2, validators=[validator1 validator2]
+2025/06/02 00:43:57 Wave Consensus [validator1]: ✅ Received 1 blocks from VALID LEADER validator2 for wave 1
+2025/06/02 00:43:57 Wave Consensus [validator1]: 🗳️ Voting on leader's block 4ace8d3e39a65473 in wave 1
+2025/06/02 00:43:57 Wave Consensus [validator1]: Using original hash for voting: d8f444c517c6e2ef
+2025/06/02 00:43:57 Wave Consensus [validator1]: Voted commit for block d8f444c517c6e2ef in wave 1
+2025/06/02 00:43:57 Wave Consensus [validator1]: Failed to send to 13.52.213.240:6001: write tcp 172.31.2.222:35794->13.52.213.240:6001: use of closed network connection
+2025/06/02 00:43:57 Wave Consensus [validator1]: Broadcasted vote to 0 peers
+2025/06/02 00:43:57 Wave Consensus [validator1]: 🎉 Block d8f444c517c6e2ef finalized in wave 1 with 2/2 votes
+2025/06/02 00:43:57 Wave Consensus [validator1]: ✅ Wave 1 FINALIZED with 1 blocks
+2025/06/02 00:43:57 Wave Consensus [validator1]: 📊 Total confirmed blocks: 0
+2025/06/02 00:43:57 🔧 DEBUG: Wave 2 leader calculation: leaderIndex=0, leader=validator1, validators=[validator1 validator2]
+2025/06/02 00:43:57 Wave Consensus [validator1]: Advanced to wave 2, Leader: validator1
+2025/06/02 00:43:57 🔧 DEBUG: Wave 2, leaderIndex: 0, currentLeader: validator1, myID: validator1, isLeader: true
+2025/06/02 00:43:57 Wave Consensus [validator1]: 👑 I am the LEADER for wave 2!
+2025/06/02 00:43:57 🔧 DEBUG: Wave 2, leaderIndex: 0, currentLeader: validator1, myID: validator1, isLeader: true
+2025/06/02 00:43:57 Wave Consensus [validator1]: 🚀 LEADER selected TOP ROUND block for wave 2 from validator validator2
+2025/06/02 00:43:57 Wave Consensus [validator1]: 📦 Block Hash: aa42238e97e8b769
+2025/06/02 00:43:57 Wave Consensus [validator1]: 🔄 Round: 4
+2025/06/02 00:43:57 Wave Consensus [validator1]: 📏 Height: 7
+2025/06/02 00:43:57 Wave Consensus [validator1]: 👤 Block Creator: validator2
+2025/06/02 00:43:57 Wave Consensus [validator1]: Using original hash for voting: 603abe4041d956dc
+2025/06/02 00:43:57 Wave Consensus [validator1]: Voted commit for block 603abe4041d956dc in wave 2
+2025/06/02 00:43:57 Wave Consensus [validator1]: Failed to send to 13.52.213.240:6001: write tcp 172.31.2.222:35794->13.52.213.240:6001: use of closed network connection
+2025/06/02 00:43:57 Wave Consensus [validator1]: Broadcasted vote to 0 peers
+2025/06/02 00:43:57 Wave Consensus [validator1]: Failed to send to 13.52.213.240:6001: write tcp 172.31.2.222:35794->13.52.213.240:6001: use of closed network connection
+2025/06/02 00:43:57 Wave Consensus [validator1]: Broadcasted wave_blocks to 0 peers
+2025/06/02 00:43:58 Wave Consensus [validator1]: ⏳ Waiting for wave 2 to finalize before advancing
+2025/06/02 00:43:59 Wave Consensus [validator1]: ⏳ Waiting for wave 2 to finalize before advancing
+2025/06/02 00:44:00 Wave Consensus [validator1]: ⏳ Waiting for wave 2 to finalize before advancing
+2025/06/02 00:44:01 Wave Consensus [validator1]: ⏳ Waiting for wave 2 to finalize before advancing
+2025/06/02 00:44:02 Wave Consensus [validator1]: ⏳ Waiting for wave 2 to finalize before advancing
+2025/06/02 00:44:03 Wave Consensus [validator1]: ⏳ Waiting for wave 2 to finalize before advancing
+2025/06/02 00:44:04 🔧 DEBUG: Wave 2 leader calculation: leaderIndex=0, leader=validator1, validators=[validator1 validator2]
+2025/06/02 00:44:04 🔧 DEBUG: Wave 2, leaderIndex: 0, currentLeader: validator1, myID: validator1, isLeader: true
+
+=== Wave Status [00:44:04] ===
+Wave: 2, Leader: validator1 👑, Finalized: 1, Peers: 1
+========================
+2025/06/02 00:44:04 Wave Consensus [validator1]: ⏳ Waiting for wave 2 to finalize before advancing
+2025/06/02 00:44:05 Wave Consensus [validator1]: ⏳ Waiting for wave 2 to finalize before advancing
+2025/06/02 00:44:06 Wave Consensus [validator1]: ⏳ Waiting for wave 2 to finalize before advancing
+
+=== Shutting Down ===
+2025/06/02 00:44:07 Wave Consensus [validator1]: Stopping

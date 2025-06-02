@@ -339,25 +339,20 @@ func (wc *WaveConsensus) processWave(wave types.Wave) {
 	// Get blocks from DAG sync
 	recentBlocks := wc.dagReader.GetRecentBlocks(20)
 	
-	// Filter to only get blocks created by this validator (leader's own blocks)
-	var ownBlocks []*types.Block
-	for _, block := range recentBlocks {
-		if block.Header.Validator == wc.validatorID {
-			ownBlocks = append(ownBlocks, block)
-		}
-	}
-
-	if len(ownBlocks) == 0 {
-		log.Printf("Wave Consensus [%s]: 📭 No own blocks found for wave %d", wc.validatorID, wave)
+	// Process ALL blocks from ALL validators (not just leader's own blocks)
+	// This ensures cross-validator block confirmation
+	if len(recentBlocks) == 0 {
+		log.Printf("Wave Consensus [%s]: 📭 No blocks found for wave %d", wc.validatorID, wave)
 		return
 	}
 
-	// Find the block with the highest round from own blocks
+	// Find the block with the highest round from ALL validators
 	var topRoundBlock *types.Block
 	var highestRound types.Round = 0
+	var candidateBlocks []*types.Block // Store all blocks with highest round
 	
 	wc.mu.RLock()
-	for _, block := range ownBlocks {
+	for _, block := range recentBlocks {
 		// Check if this block was already processed in previous waves
 		alreadyProcessed := false
 		for finalizedWave := range wc.finalizedWaves {
@@ -374,16 +369,22 @@ func (wc *WaveConsensus) processWave(wave types.Wave) {
 			}
 		}
 		
-		// Select the highest round block that hasn't been processed
-		if !alreadyProcessed && block.Header.Round >= highestRound {
-			highestRound = block.Header.Round
-			topRoundBlock = block
+		// Collect blocks with highest round that haven't been processed
+		if !alreadyProcessed {
+			if block.Header.Round > highestRound {
+				// Found higher round - reset candidates
+				highestRound = block.Header.Round
+				candidateBlocks = []*types.Block{block}
+			} else if block.Header.Round == highestRound {
+				// Same round - add to candidates
+				candidateBlocks = append(candidateBlocks, block)
+			}
 		}
 	}
 	wc.mu.RUnlock()
 
-	if topRoundBlock == nil {
-		log.Printf("Wave Consensus [%s]: 📭 No unprocessed own blocks for wave %d - finalizing empty wave", wc.validatorID, wave)
+	if len(candidateBlocks) == 0 {
+		log.Printf("Wave Consensus [%s]: 📭 No unprocessed blocks for wave %d - finalizing empty wave", wc.validatorID, wave)
 		
 		// For empty waves, immediately mark as finalized to maintain sequential progression
 		wc.mu.Lock()
@@ -393,6 +394,26 @@ func (wc *WaveConsensus) processWave(wave types.Wave) {
 		log.Printf("Wave Consensus [%s]: ✅ Wave %d FINALIZED (empty wave)", wc.validatorID, wave)
 		return
 	}
+
+	// Fair selection: rotate based on wave number to ensure all validators get blocks selected
+	selectedIndex := int(wave) % len(candidateBlocks)
+	topRoundBlock = candidateBlocks[selectedIndex]
+	
+	log.Printf("Wave Consensus [%s]: 🎯 FAIR SELECTION - Found %d candidate blocks with round %d", 
+		wc.validatorID, len(candidateBlocks), highestRound)
+	
+	// Log all candidates
+	for i, candidate := range candidateBlocks {
+		marker := "⚪"
+		if i == selectedIndex {
+			marker = "🎯"
+		}
+		log.Printf("Wave Consensus [%s]: %s Candidate %d: validator %s, hash %x", 
+			wc.validatorID, marker, i, candidate.Header.Validator, candidate.ComputeHash()[:8])
+	}
+	
+	log.Printf("Wave Consensus [%s]: ✅ SELECTED block from validator %s (index %d of %d)", 
+		wc.validatorID, topRoundBlock.Header.Validator, selectedIndex, len(candidateBlocks))
 
 	// Update the wave field for the selected block
 	topRoundBlock.Header.Wave = wave
@@ -405,12 +426,14 @@ func (wc *WaveConsensus) processWave(wave types.Wave) {
 	}
 	wc.mu.Unlock()
 
-	log.Printf("Wave Consensus [%s]: 🚀 LEADER selected TOP ROUND block for wave %d", wc.validatorID, wave)
+	log.Printf("Wave Consensus [%s]: 🚀 LEADER selected TOP ROUND block for wave %d from validator %s", 
+		wc.validatorID, wave, topRoundBlock.Header.Validator)
 	log.Printf("Wave Consensus [%s]: 📦 Block Hash: %x", wc.validatorID, topRoundBlock.ComputeHash()[:8])
 	log.Printf("Wave Consensus [%s]: 🔄 Round: %d", wc.validatorID, topRoundBlock.Header.Round)
 	log.Printf("Wave Consensus [%s]: 📏 Height: %d", wc.validatorID, topRoundBlock.Header.Height)
+	log.Printf("Wave Consensus [%s]: 👤 Block Creator: %s", wc.validatorID, topRoundBlock.Header.Validator)
 
-	// Leader votes on their own block first
+	// Leader votes on the selected block (regardless of which validator created it)
 	wc.voteOnBlock(wave, topRoundBlock)
 
 	// Broadcast the selected block to other validators
@@ -579,18 +602,16 @@ func (wc *WaveConsensus) handleReceivedWaveBlocks(wave types.Wave, blocks []*typ
 	log.Printf("Wave Consensus [%s]: ✅ Received %d blocks from VALID LEADER %s for wave %d", 
 		wc.validatorID, len(blocks), fromValidator, wave)
 	
-	// Validate that all blocks in the proposal were created by the leader
+	// Leaders can now propose blocks from ANY validator (cross-validator confirmation)
+	// No need to validate block creator matches leader
 	for _, block := range blocks {
-		if block.Header.Validator != fromValidator {
-			log.Printf("Wave Consensus [%s]: ❌ Rejected block %x - not created by leader %s", 
-				wc.validatorID, block.ComputeHash()[:8], fromValidator)
-			return
-		}
+		log.Printf("Wave Consensus [%s]: 📋 Processing block %x from validator %s (proposed by leader %s)", 
+			wc.validatorID, block.ComputeHash()[:8], block.Header.Validator, fromValidator)
 	}
 
 	// Vote on received blocks from valid leader
 	for _, block := range blocks {
-		log.Printf("Wave Consensus [%s]: 🗳️ Voting on leader's block %x in wave %d", 
+		log.Printf("Wave Consensus [%s]: 🗳️ Voting on leader's proposed block %x in wave %d", 
 			wc.validatorID, block.ComputeHash()[:8], wave)
 		wc.voteOnBlock(wave, block)
 	}
@@ -1078,6 +1099,26 @@ func (wc *WaveConsensus) confirmBlockAndReferences(block *types.Block) {
 						wc.validatorID, refHashStr[:16])
 				}
 			}
+		}
+	}
+	
+	// ENHANCED: Also confirm blocks from the same DAG layer
+	// Get all recent blocks and confirm those in the same round or earlier
+	// This ensures comprehensive confirmation across all validators
+	recentBlocks := wc.dagReader.GetRecentBlocks(100)
+	for _, dagBlock := range recentBlocks {
+		var dagBlockHash string
+		if len(dagBlock.OriginalHash) > 0 {
+			dagBlockHash = fmt.Sprintf("%x", dagBlock.OriginalHash)
+		} else {
+			dagBlockHash = fmt.Sprintf("%x", dagBlock.ComputeHash())
+		}
+		
+		// Confirm blocks from same round or earlier rounds (causal history)
+		if dagBlock.Header.Round <= block.Header.Round && !wc.confirmedBlocks[dagBlockHash] {
+			wc.confirmedBlocks[dagBlockHash] = true
+			log.Printf("Wave Consensus [%s]: 🌊 DAG-LEVEL confirmed block %s from validator %s (Round: %d)", 
+				wc.validatorID, dagBlockHash[:16], dagBlock.Header.Validator, dagBlock.Header.Round)
 		}
 	}
 }
