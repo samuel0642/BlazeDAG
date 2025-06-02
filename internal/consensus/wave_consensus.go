@@ -45,6 +45,7 @@ type WaveConsensus struct {
 	waveBlocks    map[types.Wave][]*types.Block // blocks being processed in each wave
 	waveVotes     map[types.Wave]map[string]*WaveVote // votes per wave
 	finalizedWaves map[types.Wave]bool // finalized waves
+	confirmedBlocks map[string]bool // confirmed blocks by hash (including transitively confirmed)
 	
 	// Network layer
 	listener      net.Listener
@@ -97,6 +98,7 @@ func NewWaveConsensus(validatorID types.Address, validators []types.Address, dag
 		waveBlocks:     make(map[types.Wave][]*types.Block),
 		waveVotes:      make(map[types.Wave]map[string]*WaveVote),
 		finalizedWaves: make(map[types.Wave]bool),
+		confirmedBlocks: make(map[string]bool),
 		connections:    make(map[string]net.Conn),
 	}
 }
@@ -625,6 +627,8 @@ func (wc *WaveConsensus) checkWaveFinalization(wave types.Wave) {
 	requiredVotes := (totalValidators / 2) + 1
 	
 	finalizedBlocks := 0
+	var blocksToConfirm []*types.Block
+	
 	for blockKey, votes := range blockVotes {
 		commitVotes := 0
 		for _, vote := range votes {
@@ -637,6 +641,23 @@ func (wc *WaveConsensus) checkWaveFinalization(wave types.Wave) {
 			finalizedBlocks++
 			log.Printf("Wave Consensus [%s]: 🎉 Block %s finalized in wave %d with %d/%d votes", 
 				wc.validatorID, blockKey[:16], wave, commitVotes, totalValidators)
+			
+			// Find the corresponding block to confirm it and its references
+			if waveBlocks, exists := wc.waveBlocks[wave]; exists {
+				for _, block := range waveBlocks {
+					var currentHash string
+					if len(block.OriginalHash) > 0 {
+						currentHash = fmt.Sprintf("%x", block.OriginalHash)
+					} else {
+						currentHash = fmt.Sprintf("%x", block.ComputeHash())
+					}
+					
+					if currentHash == blockKey {
+						blocksToConfirm = append(blocksToConfirm, block)
+						break
+					}
+				}
+			}
 		}
 	}
 	
@@ -645,6 +666,16 @@ func (wc *WaveConsensus) checkWaveFinalization(wave types.Wave) {
 		wc.finalizedWaves[wave] = true
 		log.Printf("Wave Consensus [%s]: ✅ Wave %d FINALIZED with %d blocks", 
 			wc.validatorID, wave, finalizedBlocks)
+		
+		// Confirm all finalized blocks and their references transitively
+		for _, block := range blocksToConfirm {
+			log.Printf("Wave Consensus [%s]: 🔗 Starting transitive confirmation for block in wave %d", 
+				wc.validatorID, wave)
+			wc.confirmBlockAndReferences(block)
+		}
+		
+		log.Printf("Wave Consensus [%s]: 📊 Total confirmed blocks: %d", 
+			wc.validatorID, len(wc.confirmedBlocks))
 	}
 }
 
@@ -751,9 +782,13 @@ func (wc *WaveConsensus) GetBlockConfirmationStatus(blockHash string) map[string
 	wc.mu.RLock()
 	defer wc.mu.RUnlock()
 	
+	// Check if block is transitively confirmed first
+	isTransitivelyConfirmed := wc.confirmedBlocks[blockHash]
+	
 	// Find which wave this block belongs to
 	var blockWave types.Wave = 0
 	var found bool
+	var isInWaveBlocks bool
 	
 	for wave, blocks := range wc.waveBlocks {
 		for _, block := range blocks {
@@ -761,6 +796,7 @@ func (wc *WaveConsensus) GetBlockConfirmationStatus(blockHash string) map[string
 			   fmt.Sprintf("%x", block.OriginalHash) == blockHash {
 				blockWave = wave
 				found = true
+				isInWaveBlocks = true
 				break
 			}
 		}
@@ -769,16 +805,36 @@ func (wc *WaveConsensus) GetBlockConfirmationStatus(blockHash string) map[string
 		}
 	}
 	
+	// If not found in wave blocks but transitively confirmed, it's still confirmed
+	if !found && isTransitivelyConfirmed {
+		return map[string]interface{}{
+			"block_hash": blockHash,
+			"status": "finalized",
+			"message": "Block confirmed transitively through DAG references",
+			"is_finalized": true,
+			"is_transitively_confirmed": true,
+			"votes": map[string]interface{}{
+				"commit_votes": "N/A",
+				"total_votes": "N/A", 
+				"required_votes": "N/A",
+				"total_validators": len(wc.validators),
+			},
+			"wave": "N/A",
+			"current_wave": wc.currentWave,
+		}
+	}
+	
 	if !found {
 		return map[string]interface{}{
 			"block_hash": blockHash,
 			"status": "not_found",
 			"message": "Block not found in wave consensus",
+			"is_transitively_confirmed": false,
 		}
 	}
 	
 	// Check if wave is finalized
-	isFinalized := wc.finalizedWaves[blockWave]
+	isWaveFinalized := wc.finalizedWaves[blockWave]
 	
 	// Count votes for this block
 	waveVotes := wc.waveVotes[blockWave]
@@ -799,13 +855,21 @@ func (wc *WaveConsensus) GetBlockConfirmationStatus(blockHash string) map[string
 	totalValidators := len(wc.validators)
 	requiredVotes := (totalValidators / 2) + 1
 	
-	// Determine status
+	// Determine status - prioritize transitive confirmation
 	var status string
 	var message string
+	var isFinalized bool
 	
-	if isFinalized {
+	if isTransitivelyConfirmed || isWaveFinalized {
 		status = "finalized"
-		message = fmt.Sprintf("Block finalized in wave %d", blockWave)
+		isFinalized = true
+		if isTransitivelyConfirmed && isWaveFinalized {
+			message = fmt.Sprintf("Block finalized in wave %d and confirmed transitively", blockWave)
+		} else if isTransitivelyConfirmed {
+			message = fmt.Sprintf("Block confirmed transitively through DAG references")
+		} else {
+			message = fmt.Sprintf("Block finalized in wave %d", blockWave)
+		}
 	} else if blockWave > wc.currentWave {
 		status = "pending"
 		message = fmt.Sprintf("Block scheduled for future wave %d", blockWave)
@@ -826,6 +890,8 @@ func (wc *WaveConsensus) GetBlockConfirmationStatus(blockHash string) map[string
 		"status": status,
 		"message": message,
 		"is_finalized": isFinalized,
+		"is_transitively_confirmed": isTransitivelyConfirmed,
+		"is_in_wave_blocks": isInWaveBlocks,
 		"votes": map[string]interface{}{
 			"commit_votes": commitVotes,
 			"total_votes": blockVotes,
@@ -852,7 +918,8 @@ func (wc *WaveConsensus) GetAllBlocksConfirmationStatus() map[string]interface{}
 			}
 			
 			// Check if wave is finalized
-			isFinalized := wc.finalizedWaves[wave]
+			isWaveFinalized := wc.finalizedWaves[wave]
+			isTransitivelyConfirmed := wc.confirmedBlocks[blockHash]
 			
 			// Count votes for this block
 			waveVotes := wc.waveVotes[wave]
@@ -873,11 +940,13 @@ func (wc *WaveConsensus) GetAllBlocksConfirmationStatus() map[string]interface{}
 			totalValidators := len(wc.validators)
 			requiredVotes := (totalValidators / 2) + 1
 			
-			// Determine status
+			// Determine status - prioritize transitive confirmation
 			var status string
+			var isFinalized bool
 			
-			if isFinalized {
+			if isTransitivelyConfirmed || isWaveFinalized {
 				status = "finalized"
+				isFinalized = true
 			} else if wave > wc.currentWave {
 				status = "pending"
 			} else if commitVotes >= requiredVotes {
@@ -892,6 +961,8 @@ func (wc *WaveConsensus) GetAllBlocksConfirmationStatus() map[string]interface{}
 				"wave": wave,
 				"status": status,
 				"is_finalized": isFinalized,
+				"is_transitively_confirmed": isTransitivelyConfirmed,
+				"is_wave_finalized": isWaveFinalized,
 				"commit_votes": commitVotes,
 				"total_votes": blockVotes,
 				"required_votes": requiredVotes,
@@ -900,9 +971,27 @@ func (wc *WaveConsensus) GetAllBlocksConfirmationStatus() map[string]interface{}
 		}
 	}
 	
+	// Also include blocks that are transitively confirmed but not in wave blocks
+	for blockHash, confirmed := range wc.confirmedBlocks {
+		if confirmed && blockStatuses[blockHash] == nil {
+			blockStatuses[blockHash] = map[string]interface{}{
+				"wave": "N/A",
+				"status": "finalized",
+				"is_finalized": true,
+				"is_transitively_confirmed": true,
+				"is_wave_finalized": false,
+				"commit_votes": "N/A",
+				"total_votes": "N/A",
+				"required_votes": "N/A",
+				"total_validators": len(wc.validators),
+			}
+		}
+	}
+	
 	return map[string]interface{}{
 		"current_wave": wc.currentWave,
 		"total_finalized_waves": len(wc.finalizedWaves),
+		"total_confirmed_blocks": len(wc.confirmedBlocks),
 		"blocks": blockStatuses,
 	}
 }
@@ -944,4 +1033,74 @@ func (wc *WaveConsensus) handleAllBlocksConfirmation(w http.ResponseWriter, r *h
 	
 	status := wc.GetAllBlocksConfirmationStatus()
 	json.NewEncoder(w).Encode(status)
+}
+
+// confirmBlockAndReferences confirms a block and all blocks it references transitively
+func (wc *WaveConsensus) confirmBlockAndReferences(block *types.Block) {
+	if block == nil {
+		return
+	}
+	
+	// Get block hash for tracking
+	var blockHash string
+	if len(block.OriginalHash) > 0 {
+		blockHash = fmt.Sprintf("%x", block.OriginalHash)
+	} else {
+		blockHash = fmt.Sprintf("%x", block.ComputeHash())
+	}
+	
+	// Check if already confirmed to avoid infinite recursion
+	if wc.confirmedBlocks[blockHash] {
+		return
+	}
+	
+	// Mark this block as confirmed
+	wc.confirmedBlocks[blockHash] = true
+	log.Printf("Wave Consensus [%s]: ✅ CONFIRMED block %s (Round: %d, Wave: %d)", 
+		wc.validatorID, blockHash[:16], block.Header.Round, block.Header.Wave)
+	
+	// Recursively confirm all referenced blocks
+	if block.Header.References != nil {
+		for _, ref := range block.Header.References {
+			refHashStr := fmt.Sprintf("%x", ref.BlockHash)
+			
+			// Try to find the referenced block in our local storage
+			referencedBlock := wc.findBlockByHash(ref.BlockHash)
+			if referencedBlock != nil {
+				log.Printf("Wave Consensus [%s]: 🔗 Transitively confirming referenced block %s (Round: %d, Wave: %d)", 
+					wc.validatorID, refHashStr[:16], ref.Round, ref.Wave)
+				wc.confirmBlockAndReferences(referencedBlock)
+			} else {
+				// Block not found locally - mark as confirmed anyway since we're accepting the reference
+				if !wc.confirmedBlocks[refHashStr] {
+					wc.confirmedBlocks[refHashStr] = true
+					log.Printf("Wave Consensus [%s]: ✅ CONFIRMED referenced block %s (not found locally but accepted via reference)", 
+						wc.validatorID, refHashStr[:16])
+				}
+			}
+		}
+	}
+}
+
+// findBlockByHash finds a block by hash in wave blocks
+func (wc *WaveConsensus) findBlockByHash(blockHash []byte) *types.Block {
+	hashStr := fmt.Sprintf("%x", blockHash)
+	
+	// Search through all wave blocks
+	for _, blocks := range wc.waveBlocks {
+		for _, block := range blocks {
+			var currentHash string
+			if len(block.OriginalHash) > 0 {
+				currentHash = fmt.Sprintf("%x", block.OriginalHash)
+			} else {
+				currentHash = fmt.Sprintf("%x", block.ComputeHash())
+			}
+			
+			if currentHash == hashStr {
+				return block
+			}
+		}
+	}
+	
+	return nil
 } 

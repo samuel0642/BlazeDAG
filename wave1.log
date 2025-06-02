@@ -1,0 +1,13 @@
+nohup: ignoring input
+flag provided but not defined: -validator-id
+Usage of ./wave-consensus:
+  -dag-addr string
+    	DAG sync address to connect to (default "localhost:4001")
+  -id string
+    	Validator ID (default "wave-validator1")
+  -wave-duration duration
+    	Wave duration for consensus (default 1s)
+  -wave-listen string
+    	Wave consensus listen address (default "localhost:6001")
+  -wave-peers string
+    	Comma-separated wave consensus peer addresses

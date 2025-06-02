@@ -1,0 +1,9 @@
+nohup: ignoring input
+flag provided but not defined: -validator-id
+Usage of ./dagsync:
+  -id string
+    	Validator ID (default "validator1")
+  -listen string
+    	Listen address (default "localhost:3001")
+  -peers string
+    	Comma-separated peer addresses
