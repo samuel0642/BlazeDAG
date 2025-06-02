@@ -104,6 +104,9 @@ func (e *Engine) blockCreationLoop() {
 			if e.config.IsValidator {
 				fmt.Printf("22222")
 				state := e.stateManager.GetState()
+				
+				state.CleanupOldBlocks()
+				
 				block, err := e.blockProcessor.CreateBlock(types.Round(state.CurrentRound), types.Wave(state.CurrentWave))
 				if err != nil {
 					log.Printf("Failed to create block: %v", err)
@@ -117,24 +120,31 @@ func (e *Engine) blockCreationLoop() {
 	}
 }
 
-// State represents the current state of the engine
+// State represents the current state of the system
 type State struct {
-	// Block state
+	// Block management
 	LatestBlock     *types.Block
 	PendingBlocks   map[string]*types.Block
 	FinalizedBlocks map[string]*types.Block
-
+	
 	// Consensus state
-	CurrentWave     uint64
-	CurrentRound    uint64
-	ActiveProposals map[string]*types.Proposal
-	Votes           map[string][]*types.Vote
-
+	CurrentRound   types.Round
+	CurrentWave    types.Wave
+	CurrentLeader  types.Address
+	
 	// Network state
+	ActiveProposals map[string]*types.Proposal
+	Votes          map[string][]*types.Vote
 	ConnectedPeers map[types.Address]*types.Peer
+	
+	// Memory management
+	maxPendingBlocks   int
+	maxFinalizedBlocks int
+	
+	mu sync.RWMutex
 }
 
-// NewState creates a new engine state
+// NewState creates a new state
 func NewState() *State {
 	return &State{
 		PendingBlocks:   make(map[string]*types.Block),
@@ -142,5 +152,62 @@ func NewState() *State {
 		ActiveProposals: make(map[string]*types.Proposal),
 		Votes:           make(map[string][]*types.Vote),
 		ConnectedPeers:  make(map[types.Address]*types.Peer),
+		maxPendingBlocks:   50,
+		maxFinalizedBlocks: 100,
 	}
+}
+
+// CleanupOldBlocks removes old blocks to prevent memory overflow
+func (s *State) CleanupOldBlocks() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	// Clean up pending blocks
+	if len(s.PendingBlocks) > 10 {
+		// Convert to slice for easier management
+		pendingHashes := make([]string, 0, len(s.PendingBlocks))
+		for hash := range s.PendingBlocks {
+			pendingHashes = append(pendingHashes, hash)
+		}
+		
+		keepCount := 5
+		
+		blocksToRemove := len(pendingHashes) - keepCount
+		if blocksToRemove > 0 {
+			for i := 0; i < blocksToRemove; i++ {
+				delete(s.PendingBlocks, pendingHashes[i])
+			}
+			log.Printf("🧹 State Cleanup: Removed %d old pending blocks, keeping %d in memory", 
+				blocksToRemove, len(s.PendingBlocks))
+		}
+	}
+	
+	// Clean up finalized blocks
+	if len(s.FinalizedBlocks) > 20 {
+		// Convert to slice for easier management
+		finalizedHashes := make([]string, 0, len(s.FinalizedBlocks))
+		for hash := range s.FinalizedBlocks {
+			finalizedHashes = append(finalizedHashes, hash)
+		}
+		
+		keepCount := 10
+		
+		blocksToRemove := len(finalizedHashes) - keepCount
+		if blocksToRemove > 0 {
+			for i := 0; i < blocksToRemove; i++ {
+				delete(s.FinalizedBlocks, finalizedHashes[i])
+			}
+			log.Printf("🧹 State Cleanup: Removed %d old finalized blocks, keeping %d in memory", 
+				blocksToRemove, len(s.FinalizedBlocks))
+		}
+	}
+}
+
+// SetMemoryLimits allows configuring memory limits
+func (s *State) SetMemoryLimits(maxPending, maxFinalized int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.maxPendingBlocks = maxPending
+	s.maxFinalizedBlocks = maxFinalized
+	log.Printf("State memory limits set: %d pending blocks, %d finalized blocks", maxPending, maxFinalized)
 }

@@ -417,14 +417,10 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 			blockHash, block.Header.Height, block.Header.Validator, len(block.Header.References))
 	}
 
-	// Update transaction states in mempool instead of removing them
-	for _, tx := range selectedTxs {
-		txHash := string(tx.GetHash())
-		if existingTx, exists := bp.mempool.transactions[txHash]; exists {
-			existingTx.State = types.TransactionStateIncluded
-		}
-	}
-
+	// 🔥 REMOVE TRANSACTIONS FROM MEMPOOL TO PREVENT MEMORY LEAK
+	log.Printf("🧹 Removing %d transactions from mempool to prevent memory leak", len(selectedTxs))
+	bp.mempool.RemoveTransactions(selectedTxs)
+	
 	log.Printf("Block created successfully with %d transactions (size: %d bytes) and %d references", 
 		len(selectedTxs), blockSize, len(references))
 	log.Printf("Block details:")

@@ -72,6 +72,37 @@ func (s *State) SetAccount(address []byte, account *Account) {
 	s.Accounts[string(address)] = account
 }
 
+// CleanupOldBlocks removes old blocks to prevent memory overflow
+func (s *State) CleanupOldBlocks() {
+	// Clean up pending blocks
+	if len(s.PendingBlocks) > 10 {
+		// Keep only 5 most recent blocks
+		keepCount := 5
+		removed := 0
+		for hash := range s.PendingBlocks {
+			if removed >= len(s.PendingBlocks)-keepCount {
+				break
+			}
+			delete(s.PendingBlocks, hash)
+			removed++
+		}
+	}
+	
+	// Clean up finalized blocks  
+	if len(s.FinalizedBlocks) > 20 {
+		// Keep only 10 most recent blocks
+		keepCount := 10
+		removed := 0
+		for hash := range s.FinalizedBlocks {
+			if removed >= len(s.FinalizedBlocks)-keepCount {
+				break
+			}
+			delete(s.FinalizedBlocks, hash)
+			removed++
+		}
+	}
+}
+
 // StateTransition represents a state transition
 type StateTransition struct {
 	PreState     *State

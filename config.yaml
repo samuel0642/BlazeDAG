@@ -1,0 +1,10 @@
+validator_id: "validator1"
+port: 8001
+peers:
+  - "localhost:8002"
+data_dir: "./data"
+log_level: "info"
+is_validator: true
+generate_transactions: true
+wave_timeout: "5s"
+block_interval: "2s" 

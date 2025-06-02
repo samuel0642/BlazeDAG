@@ -156,13 +156,29 @@ func (dt *DAGTransport) processDAGBlock(block *types.Block) {
 	}
 	dt.recentBlocks[round] = append(dt.recentBlocks[round], block)
 	
-	// Clean old rounds (keep last 10 rounds)
+	// 🔥 AGGRESSIVE CLEANUP: Keep only last 3 rounds (not 10!)
+	// With 40K tx per block, 10 rounds = MASSIVE memory usage
 	for r := range dt.recentBlocks {
-		if r < round-10 {
+		if r < round-3 { // Changed from 10 to 3
 			delete(dt.recentBlocks, r)
 		}
 	}
+	
+	// 🔥 LIMIT BLOCKS PER ROUND to prevent explosion
+	if len(dt.recentBlocks[round]) > 5 { // Max 5 blocks per round
+		// Keep only most recent 5 blocks
+		dt.recentBlocks[round] = dt.recentBlocks[round][len(dt.recentBlocks[round])-5:]
+	}
+	
 	dt.recentMu.Unlock()
+	
+	// 🧹 LOG MEMORY USAGE
+	totalBlocks := 0
+	for _, blocks := range dt.recentBlocks {
+		totalBlocks += len(blocks)
+	}
+	log.Printf("🧹 DAG Transport: Round %d, Total blocks in memory: %d (max 15 = 3 rounds × 5 blocks)", 
+		round, totalBlocks)
 	
 	log.Printf("DAG Transport: Added block to round %d - Hash: %s", round, string(block.ComputeHash()))
 }
@@ -193,8 +209,8 @@ func (dt *DAGTransport) GetUncommittedBlocks() []*types.Block {
 	currentRound := dt.GetCurrentDAGRound()
 	uncommitted := make([]*types.Block, 0)
 	
-	// Get blocks from last 5 rounds
-	for r := currentRound; r > 0 && r >= currentRound-5; r-- {
+	// 🔥 REDUCED: Get blocks from last 2 rounds only (not 5!)
+	for r := currentRound; r > 0 && r >= currentRound-2; r-- {
 		if blocks := dt.recentBlocks[r]; blocks != nil {
 			uncommitted = append(uncommitted, blocks...)
 		}

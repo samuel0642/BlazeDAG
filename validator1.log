@@ -1,0 +1,4 @@
+flag provided but not defined: -node-id
+Usage of ./blazedag:
+  -config string
+    	path to config file (default "config.yaml")

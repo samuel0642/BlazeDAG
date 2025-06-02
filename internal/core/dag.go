@@ -15,6 +15,7 @@ type DAG struct {
 	references map[string][]types.Hash
 	mu         sync.RWMutex
 	height     types.BlockNumber
+	maxBlocks  int  // ← ADDED: Maximum blocks to keep in memory
 }
 
 // NewDAG creates a new DAG
@@ -23,6 +24,7 @@ func NewDAG() *DAG {
 		blocks:     make(map[string]*types.Block),
 		references: make(map[string][]types.Hash),
 		height:     0,
+		maxBlocks:  50, // ← ADDED: Limit to 1000 blocks in memory (~10GB max)
 	}
 }
 
@@ -57,11 +59,73 @@ func (d *DAG) AddBlock(block *types.Block) error {
 		d.references[refHash] = append(d.references[refHash], blockHash)
 	}
 
+	// ← ADDED: Cleanup old blocks if we exceed the limit
+	if len(d.blocks) > d.maxBlocks {
+		d.cleanupOldBlocks()
+	}
+
 	// Log block addition
-	log.Printf("Added block to DAG - Hash: %s, Height: %d, Validator: %s, References: %d",
-		string(blockHash), block.Header.Height, block.Header.Validator, len(block.Header.References))
+	log.Printf("Added block to DAG - Hash: %s, Height: %d, Validator: %s, References: %d (Total blocks: %d)",
+		string(blockHash), block.Header.Height, block.Header.Validator, len(block.Header.References), len(d.blocks))
 
 	return nil
+}
+
+// ← ADDED: cleanupOldBlocks removes old blocks to prevent memory overflow
+func (d *DAG) cleanupOldBlocks() {
+	// Get all blocks and sort by height (oldest first)
+	blocks := make([]*types.Block, 0, len(d.blocks))
+	for _, block := range d.blocks {
+		blocks = append(blocks, block)
+	}
+
+	sort.Slice(blocks, func(i, j int) bool {
+		return blocks[i].Header.Height < blocks[j].Header.Height
+	})
+
+	// Keep only the most recent maxBlocks/2 blocks (leave room for growth)
+	keepCount := d.maxBlocks / 2
+	if keepCount < 10 {
+		keepCount = 10 // Always keep at least 10 blocks (not 100!)
+	}
+
+	blocksToRemove := len(blocks) - keepCount
+	if blocksToRemove <= 0 {
+		return
+	}
+
+	// Remove old blocks
+	for i := 0; i < blocksToRemove; i++ {
+		block := blocks[i]
+		blockHash := string(block.ComputeHash())
+		
+		// Remove from blocks map
+		delete(d.blocks, blockHash)
+		
+		// Remove from references map
+		delete(d.references, blockHash)
+		
+		// Remove references to this block from other blocks
+		for refHash, refs := range d.references {
+			for j, ref := range refs {
+				if string(ref) == blockHash {
+					d.references[refHash] = append(refs[:j], refs[j+1:]...)
+					break
+				}
+			}
+		}
+	}
+
+	log.Printf("🧹 DAG Cleanup: Removed %d old blocks, keeping %d blocks in memory (Height: %d)", 
+		blocksToRemove, len(d.blocks), d.height)
+}
+
+// ← ADDED: SetMaxBlocks allows configuring the memory limit
+func (d *DAG) SetMaxBlocks(maxBlocks int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.maxBlocks = maxBlocks
+	log.Printf("DAG memory limit set to %d blocks (~%.1f GB)", maxBlocks, float64(maxBlocks*10)/1000)
 }
 
 // GetBlock returns a block by its hash

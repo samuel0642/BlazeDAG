@@ -265,6 +265,13 @@ func (wc *WaveConsensus) commitProposal(wave types.Wave, proposal *types.Proposa
 			wc.commitOrder = append(wc.commitOrder, block)
 		}
 	}
+	
+	// 🔥 CLEANUP OLD WAVE DATA TO PREVENT MEMORY LEAKS
+	wc.cleanupOldWaveData(wave)
+	
+	// 🔥 LIMIT COMMITTED BLOCKS TO PREVENT INFINITE GROWTH
+	wc.limitCommittedBlocks()
+	
 	wc.mu.Unlock()
 	
 	log.Printf("Wave Consensus: Committed proposal for wave %d with %d blocks in causal history", 
@@ -272,6 +279,39 @@ func (wc *WaveConsensus) commitProposal(wave types.Wave, proposal *types.Proposa
 	
 	// Advance to next wave
 	wc.advanceWave()
+}
+
+// 🧹 cleanupOldWaveData removes old wave data to prevent memory leaks
+func (wc *WaveConsensus) cleanupOldWaveData(currentWave types.Wave) {
+	const keepWaves = 5 // Keep only last 5 waves
+	
+	// Clean up old waves
+	for wave := range wc.proposals {
+		if wave < currentWave-keepWaves {
+			delete(wc.proposals, wave)
+			delete(wc.votes, wave)
+			delete(wc.complaints, wave)
+		}
+	}
+}
+
+// 🧹 limitCommittedBlocks limits the number of committed blocks to prevent memory explosion
+func (wc *WaveConsensus) limitCommittedBlocks() {
+	const maxCommittedBlocks = 100 // Keep only last 100 committed blocks
+	
+	if len(wc.commitOrder) > maxCommittedBlocks {
+		// Remove oldest blocks
+		oldestBlocks := wc.commitOrder[:len(wc.commitOrder)-maxCommittedBlocks]
+		for _, block := range oldestBlocks {
+			blockHash := string(block.ComputeHash())
+			delete(wc.committedBlocks, blockHash)
+		}
+		
+		// Keep only recent blocks
+		wc.commitOrder = wc.commitOrder[len(wc.commitOrder)-maxCommittedBlocks:]
+		
+		log.Printf("🧹 Wave Consensus Cleanup: Limited to %d committed blocks", maxCommittedBlocks)
+	}
 }
 
 // handleWaveTimeout handles wave timeout (complaint mechanism)

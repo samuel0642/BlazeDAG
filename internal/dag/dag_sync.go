@@ -296,7 +296,26 @@ func (ds *DAGSync) createRoundBlock(round types.Round) {
 		ds.roundBlocks[round] = make([]*types.Block, 0)
 	}
 	ds.roundBlocks[round] = append(ds.roundBlocks[round], block)
+	
+	// 🔥 CLEANUP OLD ROUNDS TO PREVENT MEMORY EXPLOSION  
+	// Keep only last 3 rounds in roundBlocks (each round can be 30MB+ with 40K tx)
+	for oldRound := range ds.roundBlocks {
+		if oldRound < round-3 { // Keep only 3 most recent rounds
+			delete(ds.roundBlocks, oldRound)
+		}
+	}
+	
+	// 🧹 LOG MEMORY USAGE
+	totalRoundsInMemory := len(ds.roundBlocks)
+	totalBlocksInMemory := 0
+	for _, blocks := range ds.roundBlocks {
+		totalBlocksInMemory += len(blocks)
+	}
+	
 	ds.mu.Unlock()
+	
+	log.Printf("🧹 DAG Sync [%s]: Round %d cleanup - Rounds in memory: %d, Total blocks: %d", 
+		ds.validatorID, round, totalRoundsInMemory, totalBlocksInMemory)
 	
 	// Detailed logging with block information and performance metrics
 	blockSize := ds.estimateBlockSize(block)

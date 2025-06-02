@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
@@ -46,6 +47,10 @@ type WaveConsensus struct {
 	waveVotes     map[types.Wave]map[string]*WaveVote // votes per wave
 	finalizedWaves map[types.Wave]bool // finalized waves
 	confirmedBlocks map[string]bool // confirmed blocks by hash (including transitively confirmed)
+	
+	// Memory management
+	maxWaves      int // Maximum waves to keep in memory
+	maxConfirmedBlocks int // Maximum confirmed blocks to keep
 	
 	// Network layer
 	listener      net.Listener
@@ -100,6 +105,8 @@ func NewWaveConsensus(validatorID types.Address, validators []types.Address, dag
 		finalizedWaves: make(map[types.Wave]bool),
 		confirmedBlocks: make(map[string]bool),
 		connections:    make(map[string]net.Conn),
+		maxWaves:        10, // ← CHANGED: Much more aggressive (was 100)
+		maxConfirmedBlocks: 100, // ← CHANGED: Much more aggressive (was 1000)
 	}
 }
 
@@ -280,6 +287,11 @@ func (wc *WaveConsensus) advanceWave() {
 	currentWave := wc.currentWave
 	wc.mu.Unlock()
 	
+	// Cleanup memory every 2 waves
+	if currentWave%2 == 0 {
+		go wc.cleanupOldWaves()
+	}
+
 	leader := wc.getWaveLeader(currentWave)
 	log.Printf("Wave Consensus [%s]: Advanced to wave %d, Leader: %s", wc.validatorID, currentWave, leader)
 	
@@ -1144,4 +1156,73 @@ func (wc *WaveConsensus) findBlockByHash(blockHash []byte) *types.Block {
 	}
 	
 	return nil
+}
+
+// cleanupOldWaves removes old waves to prevent memory overflow
+func (wc *WaveConsensus) cleanupOldWaves() {
+	wc.mu.Lock()
+	defer wc.mu.Unlock()
+	
+	// Clean up old wave blocks
+	if len(wc.waveBlocks) > wc.maxWaves {
+		// Get all waves and sort (oldest first)
+		waves := make([]types.Wave, 0, len(wc.waveBlocks))
+		for wave := range wc.waveBlocks {
+			waves = append(waves, wave)
+		}
+		
+		sort.Slice(waves, func(i, j int) bool {
+			return waves[i] < waves[j]
+		})
+		
+		keepCount := wc.maxWaves / 2
+		if keepCount < 10 {
+			keepCount = 10
+		}
+		
+		wavesToRemove := len(waves) - keepCount
+		if wavesToRemove > 0 {
+			for i := 0; i < wavesToRemove; i++ {
+				wave := waves[i]
+				delete(wc.waveBlocks, wave)
+				delete(wc.waveVotes, wave)
+				delete(wc.finalizedWaves, wave)
+			}
+			log.Printf("🧹 WaveConsensus Cleanup: Removed %d old waves, keeping %d waves in memory", 
+				wavesToRemove, len(wc.waveBlocks))
+		}
+	}
+	
+	// Clean up old confirmed blocks
+	if len(wc.confirmedBlocks) > wc.maxConfirmedBlocks {
+		// Convert to slice for easier management
+		confirmedHashes := make([]string, 0, len(wc.confirmedBlocks))
+		for hash := range wc.confirmedBlocks {
+			confirmedHashes = append(confirmedHashes, hash)
+		}
+		
+		// Remove half of them (oldest ones - this is a simplification)
+		keepCount := wc.maxConfirmedBlocks / 2
+		if keepCount < 100 {
+			keepCount = 100
+		}
+		
+		blocksToRemove := len(confirmedHashes) - keepCount
+		if blocksToRemove > 0 {
+			for i := 0; i < blocksToRemove; i++ {
+				delete(wc.confirmedBlocks, confirmedHashes[i])
+			}
+			log.Printf("🧹 WaveConsensus Cleanup: Removed %d old confirmed blocks, keeping %d in memory", 
+				blocksToRemove, len(wc.confirmedBlocks))
+		}
+	}
+}
+
+// SetMemoryLimits allows configuring memory limits
+func (wc *WaveConsensus) SetMemoryLimits(maxWaves, maxConfirmedBlocks int) {
+	wc.mu.Lock()
+	defer wc.mu.Unlock()
+	wc.maxWaves = maxWaves
+	wc.maxConfirmedBlocks = maxConfirmedBlocks
+	log.Printf("WaveConsensus memory limits set: %d waves, %d confirmed blocks", maxWaves, maxConfirmedBlocks)
 } 
