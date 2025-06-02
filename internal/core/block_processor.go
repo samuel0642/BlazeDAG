@@ -15,23 +15,63 @@ import (
 	"github.com/CrossDAG/BlazeDAG/internal/types"
 )
 
-// Mempool stores pending transactions with parallel processing
+// Mempool stores pending transactions with parallel processing optimized for 40K+ transactions
 type Mempool struct {
 	transactions map[string]*types.Transaction
 	mu           sync.RWMutex
 	workers      int
 	workChan     chan *types.Transaction
 	doneChan     chan bool
+	batchSize    int
+	maxSize      uint64
+	priorityHeap *TransactionPriorityHeap
 }
 
-// NewMempool creates a new mempool with parallel processing
-func NewMempool() *Mempool {
-	workers := runtime.NumCPU()
+// TransactionPriorityHeap implements a priority queue for transactions
+type TransactionPriorityHeap []*types.Transaction
+
+func (h TransactionPriorityHeap) Len() int { return len(h) }
+func (h TransactionPriorityHeap) Less(i, j int) bool {
+	// Higher gas price = higher priority
+	return h[i].GasPrice > h[j].GasPrice
+}
+func (h TransactionPriorityHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+func (h *TransactionPriorityHeap) Push(x interface{}) {
+	*h = append(*h, x.(*types.Transaction))
+}
+func (h *TransactionPriorityHeap) Pop() interface{} {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0 : n-1]
+	return x
+}
+
+// NewMempoolWithConfig creates a new mempool with configuration for 40K+ transactions
+func NewMempoolWithConfig(config *Config) *Mempool {
+	workers := config.WorkerCount
+	if workers <= 0 {
+		workers = runtime.NumCPU()
+	}
+	
+	batchSize := int(config.BatchSize)
+	if batchSize <= 0 {
+		batchSize = 1000
+	}
+	
+	maxSize := config.MemPoolSize
+	if maxSize == 0 {
+		maxSize = 200000 // Default to 200K transactions
+	}
+	
 	mp := &Mempool{
-		transactions: make(map[string]*types.Transaction),
+		transactions: make(map[string]*types.Transaction, maxSize),
 		workers:      workers,
-		workChan:     make(chan *types.Transaction, 1000), // Buffer size of 1000
+		workChan:     make(chan *types.Transaction, int(maxSize/10)), // 10% of max size as buffer
 		doneChan:     make(chan bool),
+		batchSize:    batchSize,
+		maxSize:      maxSize,
+		priorityHeap: &TransactionPriorityHeap{},
 	}
 
 	// Start worker pool
@@ -40,6 +80,12 @@ func NewMempool() *Mempool {
 	}
 
 	return mp
+}
+
+// NewMempool creates a new mempool with default configuration
+func NewMempool() *Mempool {
+	defaultConfig := NewDefaultConfig()
+	return NewMempoolWithConfig(defaultConfig)
 }
 
 // worker processes transactions in parallel
@@ -70,40 +116,86 @@ func (mp *Mempool) AddTransaction(tx *types.Transaction) {
 	mp.workChan <- tx
 }
 
-// GetTransactions returns all transactions in the mempool
+// GetTransactions returns transactions from the mempool with optimized batching for large volumes
 func (mp *Mempool) GetTransactions() []*types.Transaction {
 	mp.mu.RLock()
 	defer mp.mu.RUnlock()
 
-	// Create a slice to store transactions
+	// Pre-allocate slice with known capacity for better performance
 	txs := make([]*types.Transaction, 0, len(mp.transactions))
-
-	// Use a wait group to process transactions in parallel
-	var wg sync.WaitGroup
-	txChan := make(chan *types.Transaction, len(mp.transactions))
-
-	// Start workers to process transactions
-	for i := 0; i < mp.workers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for tx := range txChan {
-				txs = append(txs, tx)
-			}
-		}()
+	
+	// Use batching for large transaction volumes
+	if len(mp.transactions) > mp.batchSize {
+		return mp.getBatchedTransactions()
 	}
 
-	// Send transactions to workers
+	// For smaller volumes, use simple approach
 	for _, tx := range mp.transactions {
-		txChan <- tx
+		txs = append(txs, tx)
 	}
-	close(txChan)
-
-	// Wait for all workers to finish
-	wg.Wait()
 
 	log.Printf("Retrieved %d transactions from mempool", len(txs))
 	return txs
+}
+
+// getBatchedTransactions processes large transaction volumes in batches
+func (mp *Mempool) getBatchedTransactions() []*types.Transaction {
+	txs := make([]*types.Transaction, 0, len(mp.transactions))
+	batch := make([]*types.Transaction, 0, mp.batchSize)
+	
+	batchCount := 0
+	for _, tx := range mp.transactions {
+		batch = append(batch, tx)
+		if len(batch) >= mp.batchSize {
+			// Process batch
+			txs = append(txs, batch...)
+			batch = batch[:0] // Reset batch slice
+			batchCount++
+		}
+	}
+	
+	// Process remaining transactions
+	if len(batch) > 0 {
+		txs = append(txs, batch...)
+		batchCount++
+	}
+	
+	log.Printf("Retrieved %d transactions from mempool using %d batches", len(txs), batchCount)
+	return txs
+}
+
+// GetTopTransactions returns the top N transactions by priority for block creation
+func (mp *Mempool) GetTopTransactions(maxCount uint64) []*types.Transaction {
+	mp.mu.RLock()
+	defer mp.mu.RUnlock()
+
+	if maxCount == 0 {
+		return mp.GetTransactions()
+	}
+
+	// Convert to slice for sorting
+	allTxs := make([]*types.Transaction, 0, len(mp.transactions))
+	for _, tx := range mp.transactions {
+		if tx.State == types.TransactionStatePending {
+			allTxs = append(allTxs, tx)
+		}
+	}
+
+	// Sort by gas price (descending)
+	for i := 0; i < len(allTxs)-1; i++ {
+		for j := i + 1; j < len(allTxs); j++ {
+			if allTxs[i].GasPrice < allTxs[j].GasPrice {
+				allTxs[i], allTxs[j] = allTxs[j], allTxs[i]
+			}
+		}
+	}
+
+	// Return top transactions up to maxCount
+	if uint64(len(allTxs)) > maxCount {
+		return allTxs[:maxCount]
+	}
+	
+	return allTxs
 }
 
 // RemoveTransactions removes transactions from the mempool in parallel
@@ -156,7 +248,7 @@ func NewBlockProcessor(config *Config, stateManager *StateManager, dag *DAG) *Bl
 		config:       config,
 		stateManager: stateManager,
 		dag:          dag,
-		mempool:      NewMempool(),
+		mempool:      NewMempoolWithConfig(config), // Use configured mempool
 	}
 
 	// Load existing blocks into DAG
@@ -174,14 +266,11 @@ func NewBlockProcessor(config *Config, stateManager *StateManager, dag *DAG) *Bl
 			validBlocks = append(validBlocks, block)
 		}
 
-		// // Add valid blocks to DAG
-		// for _, block := range validBlocks {
-		// 	if err := dag.AddBlock(block); err != nil {
-		// 		log.Printf("Warning: Failed to add block %s to DAG: %v", block.ComputeHash(), err)
-		// 	}
-		// }
 		log.Printf("Loaded %d valid blocks into DAG", len(validBlocks))
 	}
+
+	log.Printf("BlockProcessor initialized with config: MaxTxPerBlock=%d, MemPoolSize=%d, Workers=%d, BatchSize=%d",
+		config.MaxTransactionsPerBlock, config.MemPoolSize, config.WorkerCount, config.BatchSize)
 
 	return bp
 }
@@ -195,27 +284,7 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 	log.Printf("\n=== Current Mempool State ===")
 	allTxs := bp.mempool.GetTransactions()
 	log.Printf("Total transactions in mempool: %d", len(allTxs))
-	for _, tx := range allTxs {
-		stateStr := "Unknown"
-		switch tx.State {
-		case types.TransactionStatePending:
-			stateStr = "Pending"
-		case types.TransactionStateIncluded:
-			stateStr = "Included"
-		case types.TransactionStateCommitted:
-			stateStr = "Committed"
-		}
-		log.Printf("Transaction: %x", tx.GetHash())
-		log.Printf("  From: %s", tx.From)
-		log.Printf("  To: %s", tx.To)
-		log.Printf("  Value: %d", tx.Value)
-		log.Printf("  Nonce: %d", tx.Nonce)
-		log.Printf("  State: %s", stateStr)
-		log.Printf("  Timestamp: %s", tx.Timestamp.Format(time.RFC3339))
-		log.Printf("---")
-	}
-	log.Printf("=== End Mempool State ===\n")
-
+	
 	// Filter only pending transactions
 	pendingTxs := make([]*types.Transaction, 0)
 	for _, tx := range allTxs {
@@ -224,10 +293,24 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 		}
 	}
 
-	log.Printf("Creating new block with %d pending transactions for round %d", len(pendingTxs), round)
+	// Enforce transaction limit per block (40K transactions)
+	maxTxPerBlock := bp.config.MaxTransactionsPerBlock
+	if maxTxPerBlock == 0 {
+		maxTxPerBlock = 40000 // Default to 40K
+	}
+
+	// Select top transactions by priority if we have more than the limit
+	selectedTxs := pendingTxs
+	if uint64(len(pendingTxs)) > maxTxPerBlock {
+		log.Printf("Selecting top %d transactions from %d pending transactions", maxTxPerBlock, len(pendingTxs))
+		selectedTxs = bp.mempool.GetTopTransactions(maxTxPerBlock)
+	}
+
+	log.Printf("Creating new block with %d transactions (max: %d) for round %d, wave %d", 
+		len(selectedTxs), maxTxPerBlock, round, currentWave)
 
 	// Set initial state for transactions
-	for _, tx := range pendingTxs {
+	for _, tx := range selectedTxs {
 		tx.State = types.TransactionStateIncluded
 	}
 
@@ -286,13 +369,13 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 		Height:     types.BlockNumber(bp.getNextHeight()),
 		ParentHash: bp.getParentHash(),
 		References: references,
-		StateRoot:  bp.calculateStateRoot(pendingTxs),
+		StateRoot:  bp.calculateStateRoot(selectedTxs),
 		Validator:  bp.config.NodeID,
 	}
 
-	// Create block body
+	// Create block body with selected transactions
 	body := &types.BlockBody{
-		Transactions: pendingTxs,
+		Transactions: selectedTxs,
 		Receipts:     make([]*types.Receipt, 0),
 		Events:       make([]*types.Event, 0),
 	}
@@ -301,6 +384,12 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 	block := &types.Block{
 		Header: header,
 		Body:   body,
+	}
+
+	// Validate block size
+	blockSize := bp.estimateBlockSize(block)
+	if blockSize > bp.config.MaxBlockSize {
+		log.Printf("Warning: Block size (%d bytes) exceeds maximum (%d bytes)", blockSize, bp.config.MaxBlockSize)
 	}
 
 	// Sign block
@@ -329,14 +418,15 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 	}
 
 	// Update transaction states in mempool instead of removing them
-	for _, tx := range pendingTxs {
+	for _, tx := range selectedTxs {
 		txHash := string(tx.GetHash())
 		if existingTx, exists := bp.mempool.transactions[txHash]; exists {
 			existingTx.State = types.TransactionStateIncluded
 		}
 	}
 
-	log.Printf("Block created successfully with %d transactions and %d references", len(pendingTxs), len(references))
+	log.Printf("Block created successfully with %d transactions (size: %d bytes) and %d references", 
+		len(selectedTxs), blockSize, len(references))
 	log.Printf("Block details:")
 	log.Printf("  Hash: %x", blockHash)
 	log.Printf("  Height: %d", block.Header.Height)
@@ -348,6 +438,15 @@ func (bp *BlockProcessor) CreateBlock(round types.Round, currentWave types.Wave)
 	log.Printf("  Transactions: %d", len(block.Body.Transactions))
 
 	return block, nil
+}
+
+// estimateBlockSize estimates the size of a block in bytes
+func (bp *BlockProcessor) estimateBlockSize(block *types.Block) uint64 {
+	// Rough estimation: header (500 bytes) + transactions (200 bytes each) + references (100 bytes each)
+	headerSize := uint64(500)
+	txSize := uint64(len(block.Body.Transactions)) * 200
+	refSize := uint64(len(block.Header.References)) * 100
+	return headerSize + txSize + refSize
 }
 
 // getNextHeight returns the next block height

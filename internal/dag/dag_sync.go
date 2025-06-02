@@ -260,8 +260,8 @@ func (ds *DAGSync) createRoundBlock(round types.Round) {
 	// Get references to blocks from previous round
 	references := ds.getPreviousRoundReferences(round - 1)
 	
-	// Create transactions (simulate)
-	transactions := ds.generateTransactions(5) // 5 transactions per block
+	// Create transactions (simulate) - Generate 40K transactions per block
+	transactions := ds.generateTransactions(40000) // 40K transactions per block
 	
 	// Create the block
 	block := &types.Block{
@@ -298,7 +298,8 @@ func (ds *DAGSync) createRoundBlock(round types.Round) {
 	ds.roundBlocks[round] = append(ds.roundBlocks[round], block)
 	ds.mu.Unlock()
 	
-	// Detailed logging with block information
+	// Detailed logging with block information and performance metrics
+	blockSize := ds.estimateBlockSize(block)
 	log.Printf("🔥 DAG Sync [%s]: CREATED BLOCK Details:", ds.validatorID)
 	log.Printf("   📦 Hash: %x", blockHash)
 	log.Printf("   🔄 Round: %d", block.Header.Round)
@@ -306,13 +307,23 @@ func (ds *DAGSync) createRoundBlock(round types.Round) {
 	log.Printf("   👤 Validator: %s", block.Header.Validator)
 	log.Printf("   🔗 References: %d", len(references))
 	log.Printf("   💼 Transactions: %d", len(transactions))
+	log.Printf("   📊 Block Size: %.2f MB (%d bytes)", float64(blockSize)/(1024*1024), blockSize)
 	log.Printf("   ⏰ Timestamp: %s", block.Header.Timestamp.Format("15:04:05"))
 	
-	log.Printf("DAG Sync [%s]: Created block for round %d with %d references", 
-		ds.validatorID, round, len(references))
+	log.Printf("DAG Sync [%s]: Created block for round %d with %d references and %d transactions (%.2f MB)", 
+		ds.validatorID, round, len(references), len(transactions), float64(blockSize)/(1024*1024))
 	
 	// Broadcast to other validators
 	ds.broadcastBlock(block)
+}
+
+// estimateBlockSize estimates the size of a block in bytes
+func (ds *DAGSync) estimateBlockSize(block *types.Block) uint64 {
+	// Rough estimation: header (500 bytes) + transactions (250 bytes each) + references (100 bytes each)
+	headerSize := uint64(500)
+	txSize := uint64(len(block.Body.Transactions)) * 250
+	refSize := uint64(len(block.Header.References)) * 100
+	return headerSize + txSize + refSize
 }
 
 // getPreviousRoundReferences gets references to blocks from previous round
@@ -382,25 +393,52 @@ func (ds *DAGSync) getPreviousRoundReferences(prevRound types.Round) []*types.Re
 	return references
 }
 
-// generateTransactions generates sample transactions
+// generateTransactions generates sample transactions optimized for 40K+ transactions
 func (ds *DAGSync) generateTransactions(count int) []*types.Transaction {
+	// Pre-allocate slice with known capacity for better performance
 	transactions := make([]*types.Transaction, count)
 	
-	for i := 0; i < count; i++ {
-		tx := &types.Transaction{
-			Nonce:     types.Nonce(time.Now().UnixNano() + int64(i)),
-			From:      ds.validatorID,
-			To:        types.Address(fmt.Sprintf("recipient_%d", i)),
-			Value:     types.Value(100 + i),
-			GasLimit:  21000,
-			GasPrice:  1000000000,
-			Data:      []byte(fmt.Sprintf("tx_data_%d", i)),
-			Timestamp: time.Now(),
-			State:     types.TransactionStatePending,
+	// Use batch processing for large transaction volumes
+	batchSize := 1000
+	baseTime := time.Now().UnixNano()
+	
+	log.Printf("DAG Sync [%s]: Generating %d transactions in batches of %d...", ds.validatorID, count, batchSize)
+	
+	// Process transactions in batches for better performance
+	for batchStart := 0; batchStart < count; batchStart += batchSize {
+		batchEnd := batchStart + batchSize
+		if batchEnd > count {
+			batchEnd = count
 		}
-		transactions[i] = tx
+		
+		// Generate batch of transactions
+		for i := batchStart; i < batchEnd; i++ {
+			// Create more realistic transaction data
+			recipientID := i % 1000  // Cycle through 1000 different recipients
+			value := 100 + (i % 10000) // Values from 100 to 10099
+			gasPrice := 1000000000 + uint64(i%1000000) // Varying gas prices for priority
+			
+			tx := &types.Transaction{
+				Nonce:     types.Nonce(baseTime + int64(i)),
+				From:      ds.validatorID,
+				To:        types.Address(fmt.Sprintf("recipient_%d", recipientID)),
+				Value:     types.Value(value),
+				GasLimit:  21000,
+				GasPrice:  gasPrice,
+				Data:      []byte(fmt.Sprintf("tx_data_%d", i)),
+				Timestamp: time.Now(),
+				State:     types.TransactionStatePending,
+			}
+			transactions[i] = tx
+		}
+		
+		// Log progress for large batches
+		if count >= 10000 && (batchEnd%10000 == 0 || batchEnd == count) {
+			log.Printf("DAG Sync [%s]: Generated %d/%d transactions...", ds.validatorID, batchEnd, count)
+		}
 	}
 	
+	log.Printf("DAG Sync [%s]: Successfully generated %d transactions", ds.validatorID, count)
 	return transactions
 }
 

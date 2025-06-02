@@ -37,6 +37,32 @@ type Config struct {
 	ConsensusTimeout time.Duration
 	IsValidator      bool
 	NodeID           types.Address
+	
+	// Block configuration for 40K transactions support
+	MaxTransactionsPerBlock uint64
+	MaxBlockSize            uint64  // in bytes
+	TransactionTimeoutMs    uint64  // timeout for transaction processing
+	MemPoolSize             uint64  // maximum transactions in mempool
+	BatchSize               uint64  // batch size for parallel processing
+	WorkerCount             int     // number of worker threads
+	EnableOptimizations     bool    // enable performance optimizations
+}
+
+// NewDefaultConfig creates a new config with default values optimized for 40K transactions
+func NewDefaultConfig() *Config {
+	return &Config{
+		BlockInterval:           2 * time.Second,
+		ConsensusTimeout:        30 * time.Second,
+		IsValidator:             false,
+		NodeID:                  types.Address(""),
+		MaxTransactionsPerBlock: 40000,
+		MaxBlockSize:            100 * 1024 * 1024, // 100MB
+		TransactionTimeoutMs:    5000,               // 5 seconds
+		MemPoolSize:             200000,             // 200K transactions
+		BatchSize:               1000,               // process 1000 transactions per batch
+		WorkerCount:             16,                 // 16 worker threads
+		EnableOptimizations:     true,
+	}
 }
 
 // NewEngine creates a new BlazeDAG engine
