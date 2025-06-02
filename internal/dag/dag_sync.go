@@ -720,35 +720,65 @@ func (ds *DAGSync) handleGetTransactions(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	
-	// Get recent blocks and extract transactions
-	blocks := ds.GetRecentBlocks(count / 5) // Assuming ~5 tx per block
+	// Fetch from a much larger range of blocks to ensure we get transactions from all validators
+	// With multiple validators creating blocks, we need to check many more blocks
+	numBlocksToFetch := 200 // Start with 200 blocks to cover multiple validators and rounds
+	if count > 40000 {
+		// If requesting more than 40K, fetch even more blocks
+		numBlocksToFetch = 500
+	}
+	
+	blocks := ds.GetRecentBlocks(numBlocksToFetch)
 	transactions := make([]map[string]interface{}, 0)
 	
+	log.Printf("DAG Sync [%s]: Fetching transactions from %d blocks (requested %d transactions)", 
+		ds.validatorID, len(blocks), count)
+	
+	// Create a map to track how many transactions we've found per block
+	blockTxCounts := make(map[string]int)
+	
 	for _, block := range blocks {
+		blockHash := fmt.Sprintf("%x", block.ComputeHash())
+		blockTxCount := 0
+		
 		for _, tx := range block.Body.Transactions {
 			txMap := map[string]interface{}{
-				"hash":      fmt.Sprintf("%x", tx.GetHash()),
-				"from":      string(tx.From),
-				"to":        string(tx.To),
-				"value":     tx.Value,
-				"nonce":     tx.Nonce,
-				"gasLimit":  tx.GasLimit,
-				"gasPrice":  tx.GasPrice,
-				"timestamp": tx.Timestamp,
-				"state":     tx.State,
-				"blockHash": fmt.Sprintf("%x", block.ComputeHash()),
+				"hash":        fmt.Sprintf("%x", tx.GetHash()),
+				"from":        string(tx.From),
+				"to":          string(tx.To),
+				"value":       tx.Value,
+				"nonce":       tx.Nonce,
+				"gasLimit":    tx.GasLimit,
+				"gasPrice":    tx.GasPrice,
+				"timestamp":   tx.Timestamp,
+				"state":       tx.State,
+				"blockHash":   blockHash,
 				"blockHeight": block.Header.Height,
+				"blockRound":  block.Header.Round,
+				"blockWave":   block.Header.Wave,
 			}
 			transactions = append(transactions, txMap)
+			blockTxCount++
 			
+			// Stop when we have enough transactions
 			if len(transactions) >= count {
 				break
 			}
 		}
+		
+		if blockTxCount > 0 {
+			blockTxCounts[blockHash] = blockTxCount
+		}
+		
+		// Stop when we have enough transactions
 		if len(transactions) >= count {
 			break
 		}
 	}
+	
+	log.Printf("DAG Sync [%s]: Returning %d transactions from %d blocks", 
+		ds.validatorID, len(transactions), len(blocks))
+	log.Printf("DAG Sync [%s]: Transaction distribution: %v", ds.validatorID, blockTxCounts)
 	
 	json.NewEncoder(w).Encode(transactions)
 }
