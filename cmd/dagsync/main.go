@@ -33,7 +33,7 @@ func main() {
 		types.Address(*validatorID),
 		*listenAddr,
 		peers,
-		2*time.Second,
+		1*time.Second,
 	)
 
 	sigChan := make(chan os.Signal, 1)
