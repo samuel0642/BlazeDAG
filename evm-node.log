@@ -1,0 +1,44 @@
+🚀 Starting BlazeDAG EVM Node
+Chain ID: 1337
+RPC Address: localhost:8545
+Creating 5 test accounts
+
+📝 Created Test Accounts:
+Account 1:
+  Address: 0x33dc0ef6A296AC9166346FAB9dDf846771AD1614
+  Private Key: 2ba383e0174a49495fd25bee2ddc86676390ad0feaac6375cc85993bacc403f9
+  Balance: 1000 ETH
+Account 2:
+  Address: 0x8b70f0DB0c336B6ea745478595e32d96Ad9a4619
+  Private Key: c8e0906d62e9612576c09b81468ea529d8f335c58af69df344fda7f6c7833567
+  Balance: 1000 ETH
+Account 3:
+  Address: 0xA787884899BE5D706db3eF474869AD99ECA1A8E0
+  Private Key: 3d1ac63646bffccb32fd9dafeac52472d0430b1a311395902a081052886c0817
+  Balance: 1000 ETH
+Account 4:
+  Address: 0x9E34baEf88f250e974bd933873F901551C010d45
+  Private Key: 4215cc978333e3cd1473516b640cef55a8162734bea4032a4195728d9c020661
+  Balance: 1000 ETH
+Account 5:
+  Address: 0x942E7594Dda6bf1bfc222dC9be818737524E0EC0
+  Private Key: ed0f4111e8cdd4e4e40d972cd316c6916df5a59b7767abfbb520e3ae25bdd8b4
+  Balance: 1000 ETH
+
+🌐 Starting JSON-RPC server on localhost:8545
+You can now connect with:
+  - MetaMask: http://localhost:8545
+  - web3.js: http://localhost:8545
+  - curl: curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_accounts","params":[],"id":1}' http://localhost:8545
+
+🔧 Deploying Demo Smart Contract...
+  📄 Contract Bytecode: 608060405234801561001057600080fd5b5060e68061001f60...
+  ✅ Contract deployment simulation completed
+  💡 Use the JSON-RPC API to deploy real contracts
+
+📚 Example Usage:
+1. Get accounts: curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_accounts","params":[],"id":1}' http://localhost:8545
+2. Get balance: curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_getBalance","params":["ADDRESS","latest"],"id":1}' http://localhost:8545
+3. Deploy contract: Use web3.js or similar with the contract bytecode
+
+🛑 Shutting down...
