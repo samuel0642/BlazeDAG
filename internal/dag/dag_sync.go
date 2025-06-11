@@ -38,6 +38,10 @@ type DAGSync struct {
 	roundTicker   *time.Ticker
 	roundBlocks   map[types.Round][]*types.Block // blocks per round
 	
+	// Transaction pool for EVM integration
+	pendingTxs    []*types.Transaction
+	pendingTxsMu  sync.RWMutex
+	
 	// Network layer
 	listener      net.Listener
 	connections   map[string]net.Conn
@@ -414,50 +418,69 @@ func (ds *DAGSync) getPreviousRoundReferences(prevRound types.Round) []*types.Re
 
 // generateTransactions generates sample transactions optimized for 40K+ transactions
 func (ds *DAGSync) generateTransactions(count int) []*types.Transaction {
+	// First, get any pending EVM transactions
+	pendingTxs := ds.getPendingTransactions()
+	numPending := len(pendingTxs)
+	
+	// Calculate how many additional transactions to generate
+	remainingCount := count - numPending
+	if remainingCount < 0 {
+		remainingCount = 0
+	}
+	
+	log.Printf("DAG Sync [%s]: Including %d pending EVM transactions, generating %d additional transactions", 
+		ds.validatorID, numPending, remainingCount)
+	
 	// Pre-allocate slice with known capacity for better performance
-	transactions := make([]*types.Transaction, count)
+	transactions := make([]*types.Transaction, 0, count)
 	
-	// Use batch processing for large transaction volumes
-	batchSize := 1000
-	baseTime := time.Now().UnixNano()
+	// Add pending EVM transactions first
+	transactions = append(transactions, pendingTxs...)
 	
-	log.Printf("DAG Sync [%s]: Generating %d transactions in batches of %d...", ds.validatorID, count, batchSize)
-	
-	// Process transactions in batches for better performance
-	for batchStart := 0; batchStart < count; batchStart += batchSize {
-		batchEnd := batchStart + batchSize
-		if batchEnd > count {
-			batchEnd = count
-		}
+	if remainingCount > 0 {
+		// Use batch processing for large transaction volumes
+		batchSize := 1000
+		baseTime := time.Now().UnixNano()
 		
-		// Generate batch of transactions
-		for i := batchStart; i < batchEnd; i++ {
-			// Create more realistic transaction data
-			recipientID := i % 1000  // Cycle through 1000 different recipients
-			value := 100 + (i % 10000) // Values from 100 to 10099
-			gasPrice := 1000000000 + uint64(i%1000000) // Varying gas prices for priority
-			
-			tx := &types.Transaction{
-				Nonce:     types.Nonce(baseTime + int64(i)),
-				From:      ds.validatorID,
-				To:        types.Address(fmt.Sprintf("recipient_%d", recipientID)),
-				Value:     types.Value(value),
-				GasLimit:  21000,
-				GasPrice:  gasPrice,
-				Data:      []byte(fmt.Sprintf("tx_data_%d", i)),
-				Timestamp: time.Now(),
-				State:     types.TransactionStatePending,
+		log.Printf("DAG Sync [%s]: Generating %d regular transactions in batches of %d...", ds.validatorID, remainingCount, batchSize)
+		
+		// Process transactions in batches for better performance
+		for batchStart := 0; batchStart < remainingCount; batchStart += batchSize {
+			batchEnd := batchStart + batchSize
+			if batchEnd > remainingCount {
+				batchEnd = remainingCount
 			}
-			transactions[i] = tx
-		}
-		
-		// Log progress for large batches
-		if count >= 10000 && (batchEnd%10000 == 0 || batchEnd == count) {
-			log.Printf("DAG Sync [%s]: Generated %d/%d transactions...", ds.validatorID, batchEnd, count)
+			
+			// Generate batch of transactions
+			for i := batchStart; i < batchEnd; i++ {
+				// Create more realistic transaction data
+				recipientID := i % 1000  // Cycle through 1000 different recipients
+				value := 100 + (i % 10000) // Values from 100 to 10099
+				gasPrice := 1000000000 + uint64(i%1000000) // Varying gas prices for priority
+				
+				tx := &types.Transaction{
+					Nonce:     types.Nonce(baseTime + int64(i)),
+					From:      ds.validatorID,
+					To:        types.Address(fmt.Sprintf("recipient_%d", recipientID)),
+					Value:     types.Value(value),
+					GasLimit:  21000,
+					GasPrice:  gasPrice,
+					Data:      []byte(fmt.Sprintf("tx_data_%d", i)),
+					Timestamp: time.Now(),
+					State:     types.TransactionStatePending,
+				}
+				transactions = append(transactions, tx)
+			}
+			
+			// Log progress for large batches
+			if remainingCount >= 10000 && (batchEnd%10000 == 0 || batchEnd == remainingCount) {
+				log.Printf("DAG Sync [%s]: Generated %d/%d regular transactions...", ds.validatorID, batchEnd, remainingCount)
+			}
 		}
 	}
 	
-	log.Printf("DAG Sync [%s]: Successfully generated %d transactions", ds.validatorID, count)
+	log.Printf("DAG Sync [%s]: Successfully created %d total transactions (%d EVM + %d regular)", 
+		ds.validatorID, len(transactions), numPending, remainingCount)
 	return transactions
 }
 
@@ -890,4 +913,34 @@ func (ds *DAGSync) waitForAllPeers() {
 			ds.validatorID, connectedPeers, len(ds.peers))
 		time.Sleep(1 * time.Second)
 	}
+}
+
+// AddPendingTransaction adds an EVM transaction to the pending pool
+func (ds *DAGSync) AddPendingTransaction(tx *types.Transaction) {
+	ds.pendingTxsMu.Lock()
+	defer ds.pendingTxsMu.Unlock()
+	
+	ds.pendingTxs = append(ds.pendingTxs, tx)
+	log.Printf("DAG Sync [%s]: Added EVM transaction to pending pool (total: %d)", 
+		ds.validatorID, len(ds.pendingTxs))
+}
+
+// getPendingTransactions returns and clears pending transactions
+func (ds *DAGSync) getPendingTransactions() []*types.Transaction {
+	ds.pendingTxsMu.Lock()
+	defer ds.pendingTxsMu.Unlock()
+	
+	if len(ds.pendingTxs) == 0 {
+		return nil
+	}
+	
+	// Return all pending transactions and clear the pool
+	pending := make([]*types.Transaction, len(ds.pendingTxs))
+	copy(pending, ds.pendingTxs)
+	ds.pendingTxs = ds.pendingTxs[:0] // Clear the slice
+	
+	log.Printf("DAG Sync [%s]: Retrieved %d pending EVM transactions", 
+		ds.validatorID, len(pending))
+	
+	return pending
 } 

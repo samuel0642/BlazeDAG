@@ -34,7 +34,7 @@ type EVMExecutor struct {
 
 // NewEVMExecutor creates a new EVM executor with Ethereum compatibility
 func NewEVMExecutor(state *State, gasPrice *big.Int) *EVMExecutor {
-	// Use standard Ethereum mainnet configuration
+	// Use simplified chain configuration without access lists to avoid panics
 	chainConfig := &params.ChainConfig{
 		ChainID:             big.NewInt(1337), // Custom chain ID for BlazeDAG
 		HomesteadBlock:      big.NewInt(0),
@@ -47,8 +47,9 @@ func NewEVMExecutor(state *State, gasPrice *big.Int) *EVMExecutor {
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
-		BerlinBlock:         big.NewInt(0),
-		LondonBlock:         big.NewInt(0),
+		// Disable Berlin and London forks to avoid access list issues
+		BerlinBlock:         nil,
+		LondonBlock:         nil,
 	}
 
 	vmConfig := vm.Config{

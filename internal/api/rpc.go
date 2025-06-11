@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/CrossDAG/BlazeDAG/internal/evm"
@@ -41,6 +42,28 @@ type EVMRPCServer struct {
 	keystore        *evm.Keystore
 	chainID         *big.Int
 	currentBlockNum *big.Int
+	
+	// Transaction management
+	pendingTxs     map[string]*evm.Transaction
+	txReceipts     map[string]*TransactionReceipt
+	pendingTxChan  chan *evm.Transaction
+	mu             sync.RWMutex
+}
+
+// TransactionReceipt represents a transaction receipt
+type TransactionReceipt struct {
+	TransactionHash   string `json:"transactionHash"`
+	TransactionIndex  string `json:"transactionIndex"`
+	BlockHash         string `json:"blockHash"`
+	BlockNumber       string `json:"blockNumber"`
+	From              string `json:"from"`
+	To                string `json:"to,omitempty"`
+	CumulativeGasUsed string `json:"cumulativeGasUsed"`
+	GasUsed           string `json:"gasUsed"`
+	ContractAddress   string `json:"contractAddress,omitempty"`
+	Logs              []interface{} `json:"logs"`
+	LogsBloom         string `json:"logsBloom"`
+	Status            string `json:"status"`
 }
 
 // NewEVMRPCServer creates a new EVM RPC server
@@ -50,6 +73,9 @@ func NewEVMRPCServer(executor *evm.EVMExecutor, keystore *evm.Keystore, chainID 
 		keystore:        keystore,
 		chainID:         chainID,
 		currentBlockNum: big.NewInt(1),
+		pendingTxs:      make(map[string]*evm.Transaction),
+		txReceipts:      make(map[string]*TransactionReceipt),
+		pendingTxChan:   make(chan *evm.Transaction, 1000),
 	}
 }
 
@@ -104,6 +130,8 @@ func (s *EVMRPCServer) handleRequest(req *JSONRPCRequest) *JSONRPCResponse {
 		return s.blockNumber(req)
 	case "eth_getBlockByNumber":
 		return s.getBlockByNumber(req)
+	case "eth_getTransactionReceipt":
+		return s.getTransactionReceipt(req)
 	case "eth_gasPrice":
 		return s.gasPrice(req)
 	case "net_version":
@@ -181,7 +209,7 @@ func (s *EVMRPCServer) getTransactionCount(req *JSONRPCRequest) *JSONRPCResponse
 	}
 }
 
-// sendTransaction sends a transaction
+// sendTransaction sends a transaction (asynchronous - adds to pending pool)
 func (s *EVMRPCServer) sendTransaction(req *JSONRPCRequest) *JSONRPCResponse {
 	if len(req.Params) < 1 {
 		return s.writeErrorResponse(req.ID, -32602, "Invalid params")
@@ -198,14 +226,27 @@ func (s *EVMRPCServer) sendTransaction(req *JSONRPCRequest) *JSONRPCResponse {
 		return s.writeErrorResponse(req.ID, -32602, err.Error())
 	}
 
-	// Execute transaction
-	result := s.executor.ExecuteTransaction(tx)
-	if !result.Success {
-		return s.writeErrorResponse(req.ID, -32000, result.Error.Error())
+	// Basic validation (without execution)
+	if err := s.validateTransactionBasic(tx); err != nil {
+		return s.writeErrorResponse(req.ID, -32602, err.Error())
 	}
 
 	// Create transaction hash
 	txHash := tx.CreateHash()
+	tx.Hash = txHash
+
+	// Add to pending transactions
+	s.mu.Lock()
+	s.pendingTxs[txHash.Hex()] = tx
+	s.mu.Unlock()
+
+	// Send to processing channel (non-blocking)
+	select {
+	case s.pendingTxChan <- tx:
+		// Transaction queued for processing
+	default:
+		// Channel full, transaction will be processed later
+	}
 
 	return &JSONRPCResponse{
 		JSONRPC: "2.0",
@@ -249,12 +290,69 @@ func (s *EVMRPCServer) call(req *JSONRPCRequest) *JSONRPCResponse {
 
 // estimateGas estimates gas for a transaction
 func (s *EVMRPCServer) estimateGas(req *JSONRPCRequest) *JSONRPCResponse {
-	// For simplicity, return a fixed gas estimate
-	// In production, this should actually estimate gas usage
+	if len(req.Params) < 1 {
+		return s.writeErrorResponse(req.ID, -32602, "Invalid params")
+	}
+
+	txParams, ok := req.Params[0].(map[string]interface{})
+	if !ok {
+		return s.writeErrorResponse(req.ID, -32602, "Invalid transaction params")
+	}
+
+	// Parse transaction for gas estimation
+	tx, err := s.parseTransaction(txParams)
+	if err != nil {
+		return s.writeErrorResponse(req.ID, -32602, err.Error())
+	}
+
+	// Calculate gas estimate based on transaction type and data
+	var gasEstimate uint64 = 21000 // Base gas for simple transfers
+
+	// Check if it's a contract creation (no 'to' address)
+	if tx.To == nil {
+		// Contract creation - higher base cost
+		gasEstimate = 53000 // Contract creation base cost
+		
+		// Add gas for contract code deployment
+		if len(tx.Data) > 0 {
+			// Gas for code storage: 200 gas per byte
+			gasEstimate += uint64(len(tx.Data)) * 200
+			
+			// Additional gas for contract initialization
+			gasEstimate += 32000
+		}
+	} else {
+		// Contract call or transfer
+		if len(tx.Data) > 0 {
+			// Gas for transaction data: 16 gas per non-zero byte, 4 gas per zero byte
+			for _, b := range tx.Data {
+				if b == 0 {
+					gasEstimate += 4
+				} else {
+					gasEstimate += 16
+				}
+			}
+			
+			// Additional gas for contract execution
+			gasEstimate += 2300 // Minimum stipend for contract calls
+		}
+	}
+
+	// Add a safety margin (25% more gas)
+	gasEstimate = gasEstimate * 125 / 100
+
+	// Ensure minimum and maximum limits
+	if gasEstimate < 21000 {
+		gasEstimate = 21000
+	}
+	if gasEstimate > 8000000 {
+		gasEstimate = 8000000
+	}
+
 	return &JSONRPCResponse{
 		JSONRPC: "2.0",
 		ID:      req.ID,
-		Result:  hexutil.EncodeUint64(21000),
+		Result:  hexutil.EncodeUint64(gasEstimate),
 	}
 }
 
@@ -276,6 +374,37 @@ func (s *EVMRPCServer) getCode(req *JSONRPCRequest) *JSONRPCResponse {
 		JSONRPC: "2.0",
 		ID:      req.ID,
 		Result:  hexutil.Encode(code),
+	}
+}
+
+// getTransactionReceipt returns the receipt of a transaction
+func (s *EVMRPCServer) getTransactionReceipt(req *JSONRPCRequest) *JSONRPCResponse {
+	if len(req.Params) < 1 {
+		return s.writeErrorResponse(req.ID, -32602, "Invalid params")
+	}
+
+	txHashStr, ok := req.Params[0].(string)
+	if !ok {
+		return s.writeErrorResponse(req.ID, -32602, "Invalid transaction hash")
+	}
+
+	s.mu.RLock()
+	receipt, exists := s.txReceipts[txHashStr]
+	s.mu.RUnlock()
+
+	if !exists {
+		// Return null for pending or non-existent transactions
+		return &JSONRPCResponse{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Result:  nil,
+		}
+	}
+
+	return &JSONRPCResponse{
+		JSONRPC: "2.0",
+		ID:      req.ID,
+		Result:  receipt,
 	}
 }
 
@@ -466,4 +595,86 @@ func (s *EVMRPCServer) writeErrorResponse(id interface{}, code int, message stri
 func (s *EVMRPCServer) UpdateBlockNumber(blockNumber *big.Int) {
 	s.currentBlockNum = new(big.Int).Set(blockNumber)
 	s.executor.UpdateBlockNumber(blockNumber)
+}
+
+// validateTransactionBasic performs basic transaction validation without execution
+func (s *EVMRPCServer) validateTransactionBasic(tx *evm.Transaction) error {
+	// Check balance for gas + value
+	balance := s.executor.GetState().GetBalance(tx.From)
+	gasLimit := new(big.Int).SetUint64(tx.GasLimit)
+	gasCost := new(big.Int).Mul(gasLimit, tx.GasPrice)
+	totalCost := new(big.Int).Add(gasCost, tx.Value)
+
+	if balance.Cmp(totalCost) < 0 {
+		return fmt.Errorf("insufficient funds for gas * price + value")
+	}
+
+	return nil
+}
+
+// ProcessPendingTransactions processes pending transactions and creates receipts
+func (s *EVMRPCServer) ProcessPendingTransactions() {
+	for {
+		select {
+		case tx := <-s.pendingTxChan:
+			s.processSingleTransaction(tx)
+		}
+	}
+}
+
+// processSingleTransaction processes a single transaction
+func (s *EVMRPCServer) processSingleTransaction(tx *evm.Transaction) {
+	// Execute transaction
+	result := s.executor.ExecuteTransaction(tx)
+	
+	// Create transaction receipt
+	receipt := &TransactionReceipt{
+		TransactionHash:   tx.Hash.Hex(),
+		TransactionIndex:  "0x0",
+		BlockHash:         "0x" + strings.Repeat("0", 64),
+		BlockNumber:       hexutil.EncodeBig(s.currentBlockNum),
+		From:              tx.From.Hex(),
+		CumulativeGasUsed: hexutil.EncodeUint64(result.GasUsed),
+		GasUsed:           hexutil.EncodeUint64(result.GasUsed),
+		Logs:              make([]interface{}, 0),
+		LogsBloom:         "0x" + strings.Repeat("0", 512),
+	}
+
+	if tx.To != nil {
+		receipt.To = tx.To.Hex()
+	}
+
+	if result.Success {
+		receipt.Status = "0x1"
+		if result.CreatedAddr != nil {
+			receipt.ContractAddress = result.CreatedAddr.Hex()
+		}
+	} else {
+		receipt.Status = "0x0"
+	}
+
+	// Store receipt
+	s.mu.Lock()
+	s.txReceipts[tx.Hash.Hex()] = receipt
+	// Remove from pending
+	delete(s.pendingTxs, tx.Hash.Hex())
+	s.mu.Unlock()
+}
+
+// GetPendingTransactions returns pending EVM transactions for DAG inclusion
+func (s *EVMRPCServer) GetPendingTransactions() []*evm.Transaction {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	pending := make([]*evm.Transaction, 0, len(s.pendingTxs))
+	for _, tx := range s.pendingTxs {
+		pending = append(pending, tx)
+	}
+	
+	return pending
+}
+
+// StartTransactionProcessor starts the transaction processor
+func (s *EVMRPCServer) StartTransactionProcessor() {
+	go s.ProcessPendingTransactions()
 } 

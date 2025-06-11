@@ -1,4 +1,96 @@
-.PHONY: build run clean test demo-separation build-dagsync run-single-dag run-validator1-dag run-validator2-dag run-validator3-dag run-demo-dag stop-dag test-single-dag test-multi-dag help-dag build-combined build-wave run-combined-single test-combined help-wave build-evm run-evm test-evm help-evm
+.PHONY: build run clean test demo-separation build-dagsync run-single-dag run-validator1-dag run-validator2-dag run-validator3-dag run-demo-dag stop-dag test-single-dag test-multi-dag help-dag build-combined build-wave run-combined-single test-combined help-wave build-evm run-evm test-evm help-evm build-integrated run-integrated test-integrated test-transfers test-solidity test-evm-quick status-integrated stop-integrated help-integrated
+
+# ===== INTEGRATED NODE TARGETS (NEW) =====
+
+# Build the integrated node (DAG + Wave + EVM)
+build-integrated:
+	@echo "Building BlazeDAG Integrated Node (DAG + Wave + EVM)..."
+	go build -o integrated-node ./cmd/integrated-node
+	@echo "Integrated node built successfully!"
+
+# Run integrated validators (3 validators by default)
+run-integrated: build-integrated
+	@echo "Starting integrated BlazeDAG validators..."
+	chmod +x scripts/run-integrated-validators.sh
+	./scripts/run-integrated-validators.sh
+
+# Run integrated validators with custom configuration
+run-integrated-custom: build-integrated
+	@echo "Starting integrated validators with custom configuration..."
+	@echo "Usage: make run-integrated-custom VALIDATORS=3 CHAIN_ID=1337"
+	chmod +x scripts/run-integrated-validators.sh
+	./scripts/run-integrated-validators.sh --validators=$(VALIDATORS) --chain-id=$(CHAIN_ID)
+
+# Complete smart contract test (MAIN TEST - does everything!)
+test-integrated: 
+	@echo "Running complete smart contract test: compile → deploy → test → verify on BlazeDAG"
+	chmod +x scripts/complete-smart-contract-test.sh
+	./scripts/complete-smart-contract-test.sh
+
+# Test just address-to-address transfers (simple)
+test-transfers:
+	@echo "Testing simple address-to-address transfers & balance changes..."
+	chmod +x scripts/test-address-transfers.sh
+	./scripts/test-address-transfers.sh
+
+# Test with compiled Solidity contracts (alternative approach)
+test-solidity:
+	@echo "Testing with compiled Solidity smart contracts..."
+	chmod +x scripts/compile-and-test-contract.sh
+	./scripts/compile-and-test-contract.sh
+
+# Test simple EVM functionality (quick test)
+test-evm-quick:
+	@echo "Quick EVM functionality test..."
+	chmod +x scripts/simple-evm-test.sh
+	./scripts/simple-evm-test.sh
+
+# Check status of integrated system
+status-integrated:
+	@echo "Checking integrated BlazeDAG system status..."
+	chmod +x scripts/status-check.sh
+	./scripts/status-check.sh
+
+# Stop all integrated validators
+stop-integrated:
+	@echo "Stopping all integrated validators..."
+	-pkill -f integrated-node 2>/dev/null || true
+	@echo "All integrated validators stopped!"
+
+# Help for integrated system
+help-integrated:
+	@echo "BlazeDAG Integrated System Commands:"
+	@echo ""
+	@echo "🔥 INTEGRATED NODE (DAG + Wave + EVM):"
+	@echo "  make build-integrated        - Build integrated node binary"
+	@echo "  make run-integrated          - Run 3 integrated validators"
+	@echo "  make run-integrated-custom   - Run with custom config (VALIDATORS=N CHAIN_ID=ID)"
+	@echo "  make status-integrated       - Check system status and integration"
+	@echo "  make test-integrated         - 🎯 COMPLETE SMART CONTRACT TEST (RECOMMENDED)"
+	@echo "  make test-transfers          - Simple address-to-address transfers only"
+	@echo "  make test-solidity           - Alternative Solidity compilation approach"
+	@echo "  make test-evm-quick          - Quick EVM functionality test"
+	@echo "  make stop-integrated         - Stop all integrated validators"
+	@echo ""
+	@echo "📋 FEATURES:"
+	@echo "  ✅ DAG Sync (port 4001+)"
+	@echo "  ✅ Wave Consensus (port 6001+)" 
+	@echo "  ✅ EVM Compatibility (port 8545+)"
+	@echo "  ✅ Smart Contract Support"
+	@echo "  ✅ MetaMask Compatible"
+	@echo ""
+	@echo "🌐 ENDPOINTS:"
+	@echo "  EVM RPC: http://localhost:8545 (Chain ID: 1337)"
+	@echo "  DAG API: http://localhost:8080"
+	@echo "  Wave API: http://localhost:8081"
+	@echo ""
+	@echo "🚀 QUICK START:"
+	@echo "  1. make run-integrated"
+	@echo "  2. Wait for validators to start"
+	@echo "  3. make test-integrated"
+	@echo "  4. Connect MetaMask to http://localhost:8545"
+	@echo ""
+	@echo "💡 Smart contracts deployed via EVM will appear in DAG blocks and wave consensus!"
 
 # Build the BlazeDAG binary
 build:
@@ -20,8 +112,10 @@ clean:
 	-pkill -f blazedag-combined 2>/dev/null || true
 	-pkill -f wave-consensus 2>/dev/null || true
 	-pkill -f evm-node 2>/dev/null || true
-	-rm -f dagsync blazedag-combined wave-consensus evm-node
+	-pkill -f integrated-node 2>/dev/null || true
+	-rm -f dagsync blazedag-combined wave-consensus evm-node integrated-node
 	-rm -f evm-node.pid evm-node.log
+	-rm -f validator*_integrated.log validator*_integrated.pid
 
 # Run tests
 test:
@@ -256,6 +350,12 @@ help-dag:
 help:
 	@echo "BlazeDAG Makefile Commands:"
 	@echo ""
+	@echo "🔥 === INTEGRATED SYSTEM (RECOMMENDED) ==="
+	@echo "  make help-integrated     - Show integrated system commands"
+	@echo "  make run-integrated      - Run full integrated validators (DAG + Wave + EVM)"
+	@echo "  make test-integrated     - Test with smart contracts"
+	@echo "  make stop-integrated     - Stop all integrated validators"
+	@echo ""
 	@echo "=== Original BlazeDAG ==="
 	@echo "  make build           - Build BlazeDAG binary"
 	@echo "  make run             - Run BlazeDAG node"
@@ -263,7 +363,7 @@ help:
 	@echo "  make test            - Run tests"
 	@echo "  make clean           - Clean up"
 	@echo ""
-	@echo "=== EVM Compatibility (NEW) ==="
+	@echo "=== EVM Compatibility ==="
 	@echo "  make help-evm        - Show EVM commands"
 	@echo "  make test-evm        - Full EVM test suite"
 	@echo "  make run-evm         - Run EVM-enabled node"
@@ -277,6 +377,15 @@ help:
 	@echo "  make help-wave       - Show wave consensus commands"
 	@echo "  make test-combined   - Quick test of combined system"
 	@echo ""
-	@echo "🔥 NEW: EVM Compatibility! Use 'make help-evm' for full details"
-	@echo "Quick start: 'make run-evm' then connect MetaMask to localhost:8545"
+	@echo "🚀 RECOMMENDED QUICK START:"
+	@echo "  1. make run-integrated     # Start BlazeDAG chain (DAG + Wave + EVM)"
+	@echo "  2. make test-integrated    # Complete smart contract test (compile→deploy→test→verify)"
+	@echo "  3. Connect MetaMask to http://localhost:8545 (Chain ID: 1337)"
+	@echo ""
+	@echo "💡 The complete test does EVERYTHING:"
+	@echo "  ✅ Compiles real Solidity smart contracts from source"
+	@echo "  ✅ Deploys contracts to running BlazeDAG chain"
+	@echo "  ✅ Gets deployed contract address and calls functions"
+	@echo "  ✅ Verifies transactions appear in BlazeDAG blocks"
+	@echo "  ✅ Tests full integration with DAG sync and wave consensus"
 
