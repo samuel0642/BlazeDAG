@@ -1107,3 +1107,434 @@ Account 5:
 2025/06/11 00:50:37    ⏰ Timestamp: 00:50:37
 2025/06/11 00:50:37 DAG Sync [validator1]: Created block for round 40 with 1 references and 40000 transactions (9.54 MB)
 2025/06/11 00:50:37 DAG Sync [validator1]: Broadcasted block (round 40) to 2 peers
+2025/06/11 00:50:39 DAG Sync [validator1]: Advanced to round 41
+2025/06/11 00:50:39 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator_0.0.0.0, validators=[validator1 validator_0.0.0.0 validator_0.0.0.0]
+2025/06/11 00:50:39 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator_0.0.0.0, myID: validator1, isLeader: false
+
+=== Integrated Node Status [00:50:39] ===
+🔥 Validator: validator1
+📡 DAG: Round 41, 5 blocks, 2 peers
+🌊 Wave: Wave 1, 0 finalized, 2 peers
+⚡ EVM: Chain ID 1337, RPC on 0.0.0.0:8545
+================================
+2025/06/11 00:50:39 DAG Sync [validator1]: Found 1 blocks from round 40 (from all validators)
+2025/06/11 00:50:39 DAG Sync [validator1]: Referencing blocks from validators: map[validator1:1]
+2025/06/11 00:50:39 DAG Sync [validator1]: Including 0 pending EVM transactions, generating 40000 additional transactions
+2025/06/11 00:50:39 DAG Sync [validator1]: Generating 40000 regular transactions in batches of 1000...
+2025/06/11 00:50:39 DAG Sync [validator1]: Generated 10000/40000 regular transactions...
+2025/06/11 00:50:39 DAG Sync [validator1]: Generated 20000/40000 regular transactions...
+2025/06/11 00:50:39 DAG Sync [validator1]: Generated 30000/40000 regular transactions...
+2025/06/11 00:50:39 DAG Sync [validator1]: Generated 40000/40000 regular transactions...
+2025/06/11 00:50:39 DAG Sync [validator1]: Successfully created 40000 total transactions (0 EVM + 40000 regular)
+2025/06/11 00:50:39 🧹 DAG Cleanup: Removed 1 old blocks, keeping only 5 blocks in memory
+2025/06/11 00:50:39 DAG: Added block c85795b1ede504e5 at height 41, total blocks: 5
+2025/06/11 00:50:39 🧹 DAG Sync [validator1]: Round 41 cleanup - Rounds in memory: 4, Total blocks: 4
+2025/06/11 00:50:39 🔥 DAG Sync [validator1]: CREATED BLOCK Details:
+2025/06/11 00:50:39    📦 Hash: c85795b1ede504e5b23bfe7a16b27c980cae8e4e0b41a08b909be94168be5986
+2025/06/11 00:50:39    🔄 Round: 41
+2025/06/11 00:50:39    📏 Height: 41
+2025/06/11 00:50:39    👤 Validator: validator1
+2025/06/11 00:50:39    🔗 References: 1
+2025/06/11 00:50:39    💼 Transactions: 40000
+2025/06/11 00:50:39    📊 Block Size: 9.54 MB (10000600 bytes)
+2025/06/11 00:50:39    ⏰ Timestamp: 00:50:39
+2025/06/11 00:50:39 DAG Sync [validator1]: Created block for round 41 with 1 references and 40000 transactions (9.54 MB)
+2025/06/11 00:50:39 DAG Sync [validator1]: Broadcasted block (round 41) to 2 peers
+2025/06/11 00:50:40 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/11 00:50:41 DAG Sync [validator1]: Advanced to round 42
+2025/06/11 00:50:41 DAG Sync [validator1]: Found 1 blocks from round 41 (from all validators)
+2025/06/11 00:50:41 DAG Sync [validator1]: Referencing blocks from validators: map[validator1:1]
+2025/06/11 00:50:41 DAG Sync [validator1]: Including 0 pending EVM transactions, generating 40000 additional transactions
+2025/06/11 00:50:41 DAG Sync [validator1]: Generating 40000 regular transactions in batches of 1000...
+2025/06/11 00:50:41 DAG Sync [validator1]: Generated 10000/40000 regular transactions...
+2025/06/11 00:50:41 DAG Sync [validator1]: Generated 20000/40000 regular transactions...
+2025/06/11 00:50:41 DAG Sync [validator1]: Generated 30000/40000 regular transactions...
+2025/06/11 00:50:41 DAG Sync [validator1]: Generated 40000/40000 regular transactions...
+2025/06/11 00:50:41 DAG Sync [validator1]: Successfully created 40000 total transactions (0 EVM + 40000 regular)
+2025/06/11 00:50:41 🧹 DAG Cleanup: Removed 1 old blocks, keeping only 5 blocks in memory
+2025/06/11 00:50:41 DAG: Added block 6afe8969edce49e2 at height 42, total blocks: 5
+2025/06/11 00:50:41 🧹 DAG Sync [validator1]: Round 42 cleanup - Rounds in memory: 4, Total blocks: 4
+2025/06/11 00:50:41 🔥 DAG Sync [validator1]: CREATED BLOCK Details:
+2025/06/11 00:50:41    📦 Hash: 6afe8969edce49e26227613e191a2c783942d8dc436129deddcbb9650d998868
+2025/06/11 00:50:41    🔄 Round: 42
+2025/06/11 00:50:41    📏 Height: 42
+2025/06/11 00:50:41    👤 Validator: validator1
+2025/06/11 00:50:41    🔗 References: 1
+2025/06/11 00:50:41    💼 Transactions: 40000
+2025/06/11 00:50:41    📊 Block Size: 9.54 MB (10000600 bytes)
+2025/06/11 00:50:41    ⏰ Timestamp: 00:50:41
+2025/06/11 00:50:41 DAG Sync [validator1]: Created block for round 42 with 1 references and 40000 transactions (9.54 MB)
+2025/06/11 00:50:41 DAG Sync [validator1]: Broadcasted block (round 42) to 2 peers
+2025/06/11 00:50:43 DAG Sync [validator1]: Advanced to round 43
+2025/06/11 00:50:43 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/11 00:50:43 DAG Sync [validator1]: Found 1 blocks from round 42 (from all validators)
+2025/06/11 00:50:43 DAG Sync [validator1]: Referencing blocks from validators: map[validator1:1]
+2025/06/11 00:50:43 DAG Sync [validator1]: Including 0 pending EVM transactions, generating 40000 additional transactions
+2025/06/11 00:50:43 DAG Sync [validator1]: Generating 40000 regular transactions in batches of 1000...
+2025/06/11 00:50:43 DAG Sync [validator1]: Generated 10000/40000 regular transactions...
+2025/06/11 00:50:43 DAG Sync [validator1]: Generated 20000/40000 regular transactions...
+2025/06/11 00:50:43 DAG Sync [validator1]: Generated 30000/40000 regular transactions...
+2025/06/11 00:50:43 DAG Sync [validator1]: Generated 40000/40000 regular transactions...
+2025/06/11 00:50:43 DAG Sync [validator1]: Successfully created 40000 total transactions (0 EVM + 40000 regular)
+2025/06/11 00:50:43 🧹 DAG Cleanup: Removed 1 old blocks, keeping only 5 blocks in memory
+2025/06/11 00:50:43 DAG: Added block ac190d29ce6c82df at height 43, total blocks: 5
+2025/06/11 00:50:43 🧹 DAG Sync [validator1]: Round 43 cleanup - Rounds in memory: 4, Total blocks: 4
+2025/06/11 00:50:43 🔥 DAG Sync [validator1]: CREATED BLOCK Details:
+2025/06/11 00:50:43    📦 Hash: ac190d29ce6c82df3532ee44d2427b063fecbe37ee0121b90caba2776670b50a
+2025/06/11 00:50:43    🔄 Round: 43
+2025/06/11 00:50:43    📏 Height: 43
+2025/06/11 00:50:43    👤 Validator: validator1
+2025/06/11 00:50:43    🔗 References: 1
+2025/06/11 00:50:43    💼 Transactions: 40000
+2025/06/11 00:50:43    📊 Block Size: 9.54 MB (10000600 bytes)
+2025/06/11 00:50:43    ⏰ Timestamp: 00:50:43
+2025/06/11 00:50:43 DAG Sync [validator1]: Created block for round 43 with 1 references and 40000 transactions (9.54 MB)
+2025/06/11 00:50:43 DAG Sync [validator1]: Broadcasted block (round 43) to 2 peers
+2025/06/11 00:50:45 DAG Sync [validator1]: Advanced to round 44
+2025/06/11 00:50:45 DAG Sync [validator1]: Found 1 blocks from round 43 (from all validators)
+2025/06/11 00:50:45 DAG Sync [validator1]: Referencing blocks from validators: map[validator1:1]
+2025/06/11 00:50:45 DAG Sync [validator1]: Including 0 pending EVM transactions, generating 40000 additional transactions
+2025/06/11 00:50:45 DAG Sync [validator1]: Generating 40000 regular transactions in batches of 1000...
+2025/06/11 00:50:45 DAG Sync [validator1]: Generated 10000/40000 regular transactions...
+2025/06/11 00:50:45 DAG Sync [validator1]: Generated 20000/40000 regular transactions...
+2025/06/11 00:50:45 DAG Sync [validator1]: Generated 30000/40000 regular transactions...
+2025/06/11 00:50:45 DAG Sync [validator1]: Generated 40000/40000 regular transactions...
+2025/06/11 00:50:45 DAG Sync [validator1]: Successfully created 40000 total transactions (0 EVM + 40000 regular)
+2025/06/11 00:50:45 🧹 DAG Cleanup: Removed 1 old blocks, keeping only 5 blocks in memory
+2025/06/11 00:50:45 DAG: Added block 6f6832cf073f49cf at height 44, total blocks: 5
+2025/06/11 00:50:45 🧹 DAG Sync [validator1]: Round 44 cleanup - Rounds in memory: 4, Total blocks: 4
+2025/06/11 00:50:45 🔥 DAG Sync [validator1]: CREATED BLOCK Details:
+2025/06/11 00:50:45    📦 Hash: 6f6832cf073f49cff1a4c5e529777d799ac12a6771159b33e03657f616690bf0
+2025/06/11 00:50:45    🔄 Round: 44
+2025/06/11 00:50:45    📏 Height: 44
+2025/06/11 00:50:45    👤 Validator: validator1
+2025/06/11 00:50:45    🔗 References: 1
+2025/06/11 00:50:45    💼 Transactions: 40000
+2025/06/11 00:50:45    📊 Block Size: 9.54 MB (10000600 bytes)
+2025/06/11 00:50:45    ⏰ Timestamp: 00:50:45
+2025/06/11 00:50:45 DAG Sync [validator1]: Created block for round 44 with 1 references and 40000 transactions (9.54 MB)
+2025/06/11 00:50:45 DAG Sync [validator1]: Broadcasted block (round 44) to 2 peers
+2025/06/11 00:50:46 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/11 00:50:47 DAG Sync [validator1]: Advanced to round 45
+2025/06/11 00:50:47 DAG Sync [validator1]: Found 1 blocks from round 44 (from all validators)
+2025/06/11 00:50:47 DAG Sync [validator1]: Referencing blocks from validators: map[validator1:1]
+2025/06/11 00:50:47 DAG Sync [validator1]: Including 0 pending EVM transactions, generating 40000 additional transactions
+2025/06/11 00:50:47 DAG Sync [validator1]: Generating 40000 regular transactions in batches of 1000...
+2025/06/11 00:50:47 DAG Sync [validator1]: Generated 10000/40000 regular transactions...
+2025/06/11 00:50:47 DAG Sync [validator1]: Generated 20000/40000 regular transactions...
+2025/06/11 00:50:47 DAG Sync [validator1]: Generated 30000/40000 regular transactions...
+2025/06/11 00:50:47 DAG Sync [validator1]: Generated 40000/40000 regular transactions...
+2025/06/11 00:50:47 DAG Sync [validator1]: Successfully created 40000 total transactions (0 EVM + 40000 regular)
+2025/06/11 00:50:47 🧹 DAG Cleanup: Removed 1 old blocks, keeping only 5 blocks in memory
+2025/06/11 00:50:47 DAG: Added block be6608e30b3d41af at height 45, total blocks: 5
+2025/06/11 00:50:47 🧹 DAG Sync [validator1]: Round 45 cleanup - Rounds in memory: 4, Total blocks: 4
+2025/06/11 00:50:47 🔥 DAG Sync [validator1]: CREATED BLOCK Details:
+2025/06/11 00:50:47    📦 Hash: be6608e30b3d41af6614378f7d35ca678fa5897a7b46bf08912388384e68961c
+2025/06/11 00:50:47    🔄 Round: 45
+2025/06/11 00:50:47    📏 Height: 45
+2025/06/11 00:50:47    👤 Validator: validator1
+2025/06/11 00:50:47    🔗 References: 1
+2025/06/11 00:50:47    💼 Transactions: 40000
+2025/06/11 00:50:47    📊 Block Size: 9.54 MB (10000600 bytes)
+2025/06/11 00:50:47    ⏰ Timestamp: 00:50:47
+2025/06/11 00:50:47 DAG Sync [validator1]: Created block for round 45 with 1 references and 40000 transactions (9.54 MB)
+2025/06/11 00:50:47 DAG Sync [validator1]: Broadcasted block (round 45) to 2 peers
+2025/06/11 00:50:49 DAG Sync [validator1]: Advanced to round 46
+2025/06/11 00:50:49 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator_0.0.0.0, validators=[validator1 validator_0.0.0.0 validator_0.0.0.0]
+2025/06/11 00:50:49 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator_0.0.0.0, myID: validator1, isLeader: false
+
+=== Integrated Node Status [00:50:49] ===
+🔥 Validator: validator1
+📡 DAG: Round 46, 5 blocks, 2 peers
+🌊 Wave: Wave 1, 0 finalized, 2 peers
+⚡ EVM: Chain ID 1337, RPC on 0.0.0.0:8545
+================================
+2025/06/11 00:50:49 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/11 00:50:49 DAG Sync [validator1]: Found 1 blocks from round 45 (from all validators)
+2025/06/11 00:50:49 DAG Sync [validator1]: Referencing blocks from validators: map[validator1:1]
+2025/06/11 00:50:49 DAG Sync [validator1]: Including 0 pending EVM transactions, generating 40000 additional transactions
+2025/06/11 00:50:49 DAG Sync [validator1]: Generating 40000 regular transactions in batches of 1000...
+2025/06/11 00:50:49 DAG Sync [validator1]: Generated 10000/40000 regular transactions...
+2025/06/11 00:50:49 DAG Sync [validator1]: Generated 20000/40000 regular transactions...
+2025/06/11 00:50:49 DAG Sync [validator1]: Generated 30000/40000 regular transactions...
+2025/06/11 00:50:49 DAG Sync [validator1]: Generated 40000/40000 regular transactions...
+2025/06/11 00:50:49 DAG Sync [validator1]: Successfully created 40000 total transactions (0 EVM + 40000 regular)
+2025/06/11 00:50:49 🧹 DAG Cleanup: Removed 1 old blocks, keeping only 5 blocks in memory
+2025/06/11 00:50:49 DAG: Added block 8fee286f056d497b at height 46, total blocks: 5
+2025/06/11 00:50:49 🧹 DAG Sync [validator1]: Round 46 cleanup - Rounds in memory: 4, Total blocks: 4
+2025/06/11 00:50:49 🔥 DAG Sync [validator1]: CREATED BLOCK Details:
+2025/06/11 00:50:49    📦 Hash: 8fee286f056d497bf26823eca766ac2c42fca376432b037fc43fb4838fbc9240
+2025/06/11 00:50:49    🔄 Round: 46
+2025/06/11 00:50:49    📏 Height: 46
+2025/06/11 00:50:49    👤 Validator: validator1
+2025/06/11 00:50:49    🔗 References: 1
+2025/06/11 00:50:49    💼 Transactions: 40000
+2025/06/11 00:50:49    📊 Block Size: 9.54 MB (10000600 bytes)
+2025/06/11 00:50:49    ⏰ Timestamp: 00:50:49
+2025/06/11 00:50:49 DAG Sync [validator1]: Created block for round 46 with 1 references and 40000 transactions (9.54 MB)
+2025/06/11 00:50:49 DAG Sync [validator1]: Broadcasted block (round 46) to 2 peers
+2025/06/11 00:50:51 DAG Sync [validator1]: Advanced to round 47
+2025/06/11 00:50:51 DAG Sync [validator1]: Found 1 blocks from round 46 (from all validators)
+2025/06/11 00:50:51 DAG Sync [validator1]: Referencing blocks from validators: map[validator1:1]
+2025/06/11 00:50:51 DAG Sync [validator1]: Including 0 pending EVM transactions, generating 40000 additional transactions
+2025/06/11 00:50:51 DAG Sync [validator1]: Generating 40000 regular transactions in batches of 1000...
+2025/06/11 00:50:51 DAG Sync [validator1]: Generated 10000/40000 regular transactions...
+2025/06/11 00:50:51 DAG Sync [validator1]: Generated 20000/40000 regular transactions...
+2025/06/11 00:50:51 DAG Sync [validator1]: Generated 30000/40000 regular transactions...
+2025/06/11 00:50:51 DAG Sync [validator1]: Generated 40000/40000 regular transactions...
+2025/06/11 00:50:51 DAG Sync [validator1]: Successfully created 40000 total transactions (0 EVM + 40000 regular)
+2025/06/11 00:50:51 🧹 DAG Cleanup: Removed 1 old blocks, keeping only 5 blocks in memory
+2025/06/11 00:50:51 DAG: Added block b6251128bf04ad74 at height 47, total blocks: 5
+2025/06/11 00:50:51 🧹 DAG Sync [validator1]: Round 47 cleanup - Rounds in memory: 4, Total blocks: 4
+2025/06/11 00:50:51 🔥 DAG Sync [validator1]: CREATED BLOCK Details:
+2025/06/11 00:50:51    📦 Hash: b6251128bf04ad74d15832507f6dce02d99e694f7715437ef82ce077f1e6fb31
+2025/06/11 00:50:51    🔄 Round: 47
+2025/06/11 00:50:51    📏 Height: 47
+2025/06/11 00:50:51    👤 Validator: validator1
+2025/06/11 00:50:51    🔗 References: 1
+2025/06/11 00:50:51    💼 Transactions: 40000
+2025/06/11 00:50:51    📊 Block Size: 9.54 MB (10000600 bytes)
+2025/06/11 00:50:51    ⏰ Timestamp: 00:50:51
+2025/06/11 00:50:51 DAG Sync [validator1]: Created block for round 47 with 1 references and 40000 transactions (9.54 MB)
+2025/06/11 00:50:51 DAG Sync [validator1]: Broadcasted block (round 47) to 2 peers
+2025/06/11 00:50:52 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/11 00:50:53 DAG Sync [validator1]: Advanced to round 48
+2025/06/11 00:50:53 DAG Sync [validator1]: Found 1 blocks from round 47 (from all validators)
+2025/06/11 00:50:53 DAG Sync [validator1]: Referencing blocks from validators: map[validator1:1]
+2025/06/11 00:50:53 DAG Sync [validator1]: Including 0 pending EVM transactions, generating 40000 additional transactions
+2025/06/11 00:50:53 DAG Sync [validator1]: Generating 40000 regular transactions in batches of 1000...
+2025/06/11 00:50:53 DAG Sync [validator1]: Generated 10000/40000 regular transactions...
+2025/06/11 00:50:53 DAG Sync [validator1]: Generated 20000/40000 regular transactions...
+2025/06/11 00:50:53 DAG Sync [validator1]: Generated 30000/40000 regular transactions...
+2025/06/11 00:50:53 DAG Sync [validator1]: Generated 40000/40000 regular transactions...
+2025/06/11 00:50:53 DAG Sync [validator1]: Successfully created 40000 total transactions (0 EVM + 40000 regular)
+2025/06/11 00:50:53 🧹 DAG Cleanup: Removed 1 old blocks, keeping only 5 blocks in memory
+2025/06/11 00:50:53 DAG: Added block d7dbab763f35c45a at height 48, total blocks: 5
+2025/06/11 00:50:53 🧹 DAG Sync [validator1]: Round 48 cleanup - Rounds in memory: 4, Total blocks: 4
+2025/06/11 00:50:53 🔥 DAG Sync [validator1]: CREATED BLOCK Details:
+2025/06/11 00:50:53    📦 Hash: d7dbab763f35c45ad704cde90dd204f962658b24d6c47d1e274290867cb4fb7d
+2025/06/11 00:50:53    🔄 Round: 48
+2025/06/11 00:50:53    📏 Height: 48
+2025/06/11 00:50:53    👤 Validator: validator1
+2025/06/11 00:50:53    🔗 References: 1
+2025/06/11 00:50:53    💼 Transactions: 40000
+2025/06/11 00:50:53    📊 Block Size: 9.54 MB (10000600 bytes)
+2025/06/11 00:50:53    ⏰ Timestamp: 00:50:53
+2025/06/11 00:50:53 DAG Sync [validator1]: Created block for round 48 with 1 references and 40000 transactions (9.54 MB)
+2025/06/11 00:50:53 DAG Sync [validator1]: Broadcasted block (round 48) to 2 peers
+2025/06/11 00:50:55 DAG Sync [validator1]: Advanced to round 49
+2025/06/11 00:50:55 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/11 00:50:55 DAG Sync [validator1]: Found 1 blocks from round 48 (from all validators)
+2025/06/11 00:50:55 DAG Sync [validator1]: Referencing blocks from validators: map[validator1:1]
+2025/06/11 00:50:55 DAG Sync [validator1]: Including 0 pending EVM transactions, generating 40000 additional transactions
+2025/06/11 00:50:55 DAG Sync [validator1]: Generating 40000 regular transactions in batches of 1000...
+2025/06/11 00:50:55 DAG Sync [validator1]: Generated 10000/40000 regular transactions...
+2025/06/11 00:50:55 DAG Sync [validator1]: Generated 20000/40000 regular transactions...
+2025/06/11 00:50:55 DAG Sync [validator1]: Generated 30000/40000 regular transactions...
+2025/06/11 00:50:55 DAG Sync [validator1]: Generated 40000/40000 regular transactions...
+2025/06/11 00:50:55 DAG Sync [validator1]: Successfully created 40000 total transactions (0 EVM + 40000 regular)
+2025/06/11 00:50:55 🧹 DAG Cleanup: Removed 1 old blocks, keeping only 5 blocks in memory
+2025/06/11 00:50:55 DAG: Added block fb41c3c33dc87977 at height 49, total blocks: 5
+2025/06/11 00:50:55 🧹 DAG Sync [validator1]: Round 49 cleanup - Rounds in memory: 4, Total blocks: 4
+2025/06/11 00:50:55 🔥 DAG Sync [validator1]: CREATED BLOCK Details:
+2025/06/11 00:50:55    📦 Hash: fb41c3c33dc8797782760cc6a996a6506dc95d3b7d1d15461a3016b7f2aef514
+2025/06/11 00:50:55    🔄 Round: 49
+2025/06/11 00:50:55    📏 Height: 49
+2025/06/11 00:50:55    👤 Validator: validator1
+2025/06/11 00:50:55    🔗 References: 1
+2025/06/11 00:50:55    💼 Transactions: 40000
+2025/06/11 00:50:55    📊 Block Size: 9.54 MB (10000600 bytes)
+2025/06/11 00:50:55    ⏰ Timestamp: 00:50:55
+2025/06/11 00:50:55 DAG Sync [validator1]: Created block for round 49 with 1 references and 40000 transactions (9.54 MB)
+2025/06/11 00:50:55 DAG Sync [validator1]: Broadcasted block (round 49) to 2 peers
+2025/06/11 00:50:57 DAG Sync [validator1]: Advanced to round 50
+2025/06/11 00:50:57 DAG Sync [validator1]: Found 1 blocks from round 49 (from all validators)
+2025/06/11 00:50:57 DAG Sync [validator1]: Referencing blocks from validators: map[validator1:1]
+2025/06/11 00:50:57 DAG Sync [validator1]: Including 0 pending EVM transactions, generating 40000 additional transactions
+2025/06/11 00:50:57 DAG Sync [validator1]: Generating 40000 regular transactions in batches of 1000...
+2025/06/11 00:50:57 DAG Sync [validator1]: Generated 10000/40000 regular transactions...
+2025/06/11 00:50:57 DAG Sync [validator1]: Generated 20000/40000 regular transactions...
+2025/06/11 00:50:57 DAG Sync [validator1]: Generated 30000/40000 regular transactions...
+2025/06/11 00:50:57 DAG Sync [validator1]: Generated 40000/40000 regular transactions...
+2025/06/11 00:50:57 DAG Sync [validator1]: Successfully created 40000 total transactions (0 EVM + 40000 regular)
+2025/06/11 00:50:57 🧹 DAG Cleanup: Removed 1 old blocks, keeping only 5 blocks in memory
+2025/06/11 00:50:57 DAG: Added block 70814da69448fa27 at height 50, total blocks: 5
+2025/06/11 00:50:57 🧹 DAG Sync [validator1]: Round 50 cleanup - Rounds in memory: 4, Total blocks: 4
+2025/06/11 00:50:57 🔥 DAG Sync [validator1]: CREATED BLOCK Details:
+2025/06/11 00:50:57    📦 Hash: 70814da69448fa278b82f130c2ef883bb5a5c764ba254013bc95d8dd593c2421
+2025/06/11 00:50:57    🔄 Round: 50
+2025/06/11 00:50:57    📏 Height: 50
+2025/06/11 00:50:57    👤 Validator: validator1
+2025/06/11 00:50:57    🔗 References: 1
+2025/06/11 00:50:57    💼 Transactions: 40000
+2025/06/11 00:50:57    📊 Block Size: 9.54 MB (10000600 bytes)
+2025/06/11 00:50:57    ⏰ Timestamp: 00:50:57
+2025/06/11 00:50:57 DAG Sync [validator1]: Created block for round 50 with 1 references and 40000 transactions (9.54 MB)
+2025/06/11 00:50:57 DAG Sync [validator1]: Broadcasted block (round 50) to 2 peers
+2025/06/11 00:50:58 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/11 00:50:59 DAG Sync [validator1]: Advanced to round 51
+2025/06/11 00:50:59 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator_0.0.0.0, validators=[validator1 validator_0.0.0.0 validator_0.0.0.0]
+2025/06/11 00:50:59 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator_0.0.0.0, myID: validator1, isLeader: false
+
+=== Integrated Node Status [00:50:59] ===
+🔥 Validator: validator1
+📡 DAG: Round 51, 5 blocks, 2 peers
+🌊 Wave: Wave 1, 0 finalized, 2 peers
+⚡ EVM: Chain ID 1337, RPC on 0.0.0.0:8545
+================================
+2025/06/11 00:50:59 DAG Sync [validator1]: Found 1 blocks from round 50 (from all validators)
+2025/06/11 00:50:59 DAG Sync [validator1]: Referencing blocks from validators: map[validator1:1]
+2025/06/11 00:50:59 DAG Sync [validator1]: Including 0 pending EVM transactions, generating 40000 additional transactions
+2025/06/11 00:50:59 DAG Sync [validator1]: Generating 40000 regular transactions in batches of 1000...
+2025/06/11 00:50:59 DAG Sync [validator1]: Generated 10000/40000 regular transactions...
+2025/06/11 00:50:59 DAG Sync [validator1]: Generated 20000/40000 regular transactions...
+2025/06/11 00:50:59 DAG Sync [validator1]: Generated 30000/40000 regular transactions...
+2025/06/11 00:50:59 DAG Sync [validator1]: Generated 40000/40000 regular transactions...
+2025/06/11 00:50:59 DAG Sync [validator1]: Successfully created 40000 total transactions (0 EVM + 40000 regular)
+2025/06/11 00:50:59 🧹 DAG Cleanup: Removed 1 old blocks, keeping only 5 blocks in memory
+2025/06/11 00:50:59 DAG: Added block d26584ec81970da2 at height 51, total blocks: 5
+2025/06/11 00:50:59 🧹 DAG Sync [validator1]: Round 51 cleanup - Rounds in memory: 4, Total blocks: 4
+2025/06/11 00:50:59 🔥 DAG Sync [validator1]: CREATED BLOCK Details:
+2025/06/11 00:50:59    📦 Hash: d26584ec81970da2c7b338d08d16b097bfe76e91dbaec2e1458193a905f930db
+2025/06/11 00:50:59    🔄 Round: 51
+2025/06/11 00:50:59    📏 Height: 51
+2025/06/11 00:50:59    👤 Validator: validator1
+2025/06/11 00:50:59    🔗 References: 1
+2025/06/11 00:50:59    💼 Transactions: 40000
+2025/06/11 00:50:59    📊 Block Size: 9.54 MB (10000600 bytes)
+2025/06/11 00:50:59    ⏰ Timestamp: 00:50:59
+2025/06/11 00:50:59 DAG Sync [validator1]: Created block for round 51 with 1 references and 40000 transactions (9.54 MB)
+2025/06/11 00:50:59 DAG Sync [validator1]: Broadcasted block (round 51) to 2 peers
+2025/06/11 00:51:01 DAG Sync [validator1]: Advanced to round 52
+2025/06/11 00:51:01 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/11 00:51:01 DAG Sync [validator1]: Found 1 blocks from round 51 (from all validators)
+2025/06/11 00:51:01 DAG Sync [validator1]: Referencing blocks from validators: map[validator1:1]
+2025/06/11 00:51:01 DAG Sync [validator1]: Including 0 pending EVM transactions, generating 40000 additional transactions
+2025/06/11 00:51:01 DAG Sync [validator1]: Generating 40000 regular transactions in batches of 1000...
+2025/06/11 00:51:01 DAG Sync [validator1]: Generated 10000/40000 regular transactions...
+2025/06/11 00:51:01 DAG Sync [validator1]: Generated 20000/40000 regular transactions...
+2025/06/11 00:51:01 DAG Sync [validator1]: Generated 30000/40000 regular transactions...
+2025/06/11 00:51:01 DAG Sync [validator1]: Generated 40000/40000 regular transactions...
+2025/06/11 00:51:01 DAG Sync [validator1]: Successfully created 40000 total transactions (0 EVM + 40000 regular)
+2025/06/11 00:51:01 🧹 DAG Cleanup: Removed 1 old blocks, keeping only 5 blocks in memory
+2025/06/11 00:51:01 DAG: Added block e7f6807585802991 at height 52, total blocks: 5
+2025/06/11 00:51:01 🧹 DAG Sync [validator1]: Round 52 cleanup - Rounds in memory: 4, Total blocks: 4
+2025/06/11 00:51:01 🔥 DAG Sync [validator1]: CREATED BLOCK Details:
+2025/06/11 00:51:01    📦 Hash: e7f6807585802991c913861f2b2b0b9be106a5ef68ce119331b83297fbd2a9ba
+2025/06/11 00:51:01    🔄 Round: 52
+2025/06/11 00:51:01    📏 Height: 52
+2025/06/11 00:51:01    👤 Validator: validator1
+2025/06/11 00:51:01    🔗 References: 1
+2025/06/11 00:51:01    💼 Transactions: 40000
+2025/06/11 00:51:01    📊 Block Size: 9.54 MB (10000600 bytes)
+2025/06/11 00:51:01    ⏰ Timestamp: 00:51:01
+2025/06/11 00:51:01 DAG Sync [validator1]: Created block for round 52 with 1 references and 40000 transactions (9.54 MB)
+2025/06/11 00:51:01 DAG Sync [validator1]: Broadcasted block (round 52) to 2 peers
+2025/06/11 00:51:03 DAG Sync [validator1]: Advanced to round 53
+2025/06/11 00:51:03 DAG Sync [validator1]: Found 1 blocks from round 52 (from all validators)
+2025/06/11 00:51:03 DAG Sync [validator1]: Referencing blocks from validators: map[validator1:1]
+2025/06/11 00:51:03 DAG Sync [validator1]: Including 0 pending EVM transactions, generating 40000 additional transactions
+2025/06/11 00:51:03 DAG Sync [validator1]: Generating 40000 regular transactions in batches of 1000...
+2025/06/11 00:51:03 DAG Sync [validator1]: Generated 10000/40000 regular transactions...
+2025/06/11 00:51:03 DAG Sync [validator1]: Generated 20000/40000 regular transactions...
+2025/06/11 00:51:03 DAG Sync [validator1]: Generated 30000/40000 regular transactions...
+2025/06/11 00:51:03 DAG Sync [validator1]: Generated 40000/40000 regular transactions...
+2025/06/11 00:51:03 DAG Sync [validator1]: Successfully created 40000 total transactions (0 EVM + 40000 regular)
+2025/06/11 00:51:03 🧹 DAG Cleanup: Removed 1 old blocks, keeping only 5 blocks in memory
+2025/06/11 00:51:03 DAG: Added block c58283ea6c2303bd at height 53, total blocks: 5
+2025/06/11 00:51:03 🧹 DAG Sync [validator1]: Round 53 cleanup - Rounds in memory: 4, Total blocks: 4
+2025/06/11 00:51:03 🔥 DAG Sync [validator1]: CREATED BLOCK Details:
+2025/06/11 00:51:03    📦 Hash: c58283ea6c2303bd22a15ce3833c3c61facbcaf44f15b3b02732568da36a18f9
+2025/06/11 00:51:03    🔄 Round: 53
+2025/06/11 00:51:03    📏 Height: 53
+2025/06/11 00:51:03    👤 Validator: validator1
+2025/06/11 00:51:03    🔗 References: 1
+2025/06/11 00:51:03    💼 Transactions: 40000
+2025/06/11 00:51:03    📊 Block Size: 9.54 MB (10000600 bytes)
+2025/06/11 00:51:03    ⏰ Timestamp: 00:51:03
+2025/06/11 00:51:03 DAG Sync [validator1]: Created block for round 53 with 1 references and 40000 transactions (9.54 MB)
+2025/06/11 00:51:03 DAG Sync [validator1]: Broadcasted block (round 53) to 2 peers
+2025/06/11 00:51:04 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/11 00:51:05 DAG Sync [validator1]: Advanced to round 54
+2025/06/11 00:51:05 DAG Sync [validator1]: Found 1 blocks from round 53 (from all validators)
+2025/06/11 00:51:05 DAG Sync [validator1]: Referencing blocks from validators: map[validator1:1]
+2025/06/11 00:51:05 DAG Sync [validator1]: Including 0 pending EVM transactions, generating 40000 additional transactions
+2025/06/11 00:51:05 DAG Sync [validator1]: Generating 40000 regular transactions in batches of 1000...
+2025/06/11 00:51:05 DAG Sync [validator1]: Generated 10000/40000 regular transactions...
+2025/06/11 00:51:05 DAG Sync [validator1]: Generated 20000/40000 regular transactions...
+2025/06/11 00:51:05 DAG Sync [validator1]: Generated 30000/40000 regular transactions...
+2025/06/11 00:51:05 DAG Sync [validator1]: Generated 40000/40000 regular transactions...
+2025/06/11 00:51:05 DAG Sync [validator1]: Successfully created 40000 total transactions (0 EVM + 40000 regular)
+2025/06/11 00:51:05 🧹 DAG Cleanup: Removed 1 old blocks, keeping only 5 blocks in memory
+2025/06/11 00:51:05 DAG: Added block f9f998edf11059e8 at height 54, total blocks: 5
+2025/06/11 00:51:05 🧹 DAG Sync [validator1]: Round 54 cleanup - Rounds in memory: 4, Total blocks: 4
+2025/06/11 00:51:05 🔥 DAG Sync [validator1]: CREATED BLOCK Details:
+2025/06/11 00:51:05    📦 Hash: f9f998edf11059e8bc4cff039ddf79b63c716a55e46ef90ec2b58305224fa86a
+2025/06/11 00:51:05    🔄 Round: 54
+2025/06/11 00:51:05    📏 Height: 54
+2025/06/11 00:51:05    👤 Validator: validator1
+2025/06/11 00:51:05    🔗 References: 1
+2025/06/11 00:51:05    💼 Transactions: 40000
+2025/06/11 00:51:05    📊 Block Size: 9.54 MB (10000600 bytes)
+2025/06/11 00:51:05    ⏰ Timestamp: 00:51:05
+2025/06/11 00:51:05 DAG Sync [validator1]: Created block for round 54 with 1 references and 40000 transactions (9.54 MB)
+2025/06/11 00:51:05 DAG Sync [validator1]: Broadcasted block (round 54) to 2 peers
+2025/06/11 00:51:07 DAG Sync [validator1]: Advanced to round 55
+2025/06/11 00:51:07 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
+2025/06/11 00:51:07 DAG Sync [validator1]: Found 1 blocks from round 54 (from all validators)
+2025/06/11 00:51:07 DAG Sync [validator1]: Referencing blocks from validators: map[validator1:1]
+2025/06/11 00:51:07 DAG Sync [validator1]: Including 0 pending EVM transactions, generating 40000 additional transactions
+2025/06/11 00:51:07 DAG Sync [validator1]: Generating 40000 regular transactions in batches of 1000...
+2025/06/11 00:51:07 DAG Sync [validator1]: Generated 10000/40000 regular transactions...
+2025/06/11 00:51:07 DAG Sync [validator1]: Generated 20000/40000 regular transactions...
+2025/06/11 00:51:07 DAG Sync [validator1]: Generated 30000/40000 regular transactions...
+2025/06/11 00:51:07 DAG Sync [validator1]: Generated 40000/40000 regular transactions...
+2025/06/11 00:51:07 DAG Sync [validator1]: Successfully created 40000 total transactions (0 EVM + 40000 regular)
+2025/06/11 00:51:07 🧹 DAG Cleanup: Removed 1 old blocks, keeping only 5 blocks in memory
+2025/06/11 00:51:07 DAG: Added block 7652157f7f8f9d08 at height 55, total blocks: 5
+2025/06/11 00:51:07 🧹 DAG Sync [validator1]: Round 55 cleanup - Rounds in memory: 4, Total blocks: 4
+2025/06/11 00:51:07 🔥 DAG Sync [validator1]: CREATED BLOCK Details:
+2025/06/11 00:51:07    📦 Hash: 7652157f7f8f9d084678a6e130f5284540b43979c3bc76597436f3afbfc62c64
+2025/06/11 00:51:07    🔄 Round: 55
+2025/06/11 00:51:07    📏 Height: 55
+2025/06/11 00:51:07    👤 Validator: validator1
+2025/06/11 00:51:07    🔗 References: 1
+2025/06/11 00:51:07    💼 Transactions: 40000
+2025/06/11 00:51:07    📊 Block Size: 9.54 MB (10000600 bytes)
+2025/06/11 00:51:07    ⏰ Timestamp: 00:51:07
+2025/06/11 00:51:07 DAG Sync [validator1]: Created block for round 55 with 1 references and 40000 transactions (9.54 MB)
+2025/06/11 00:51:07 DAG Sync [validator1]: Broadcasted block (round 55) to 2 peers
+2025/06/11 00:51:09 DAG Sync [validator1]: Advanced to round 56
+2025/06/11 00:51:09 🔧 DEBUG: Wave 1 leader calculation: leaderIndex=1, leader=validator_0.0.0.0, validators=[validator1 validator_0.0.0.0 validator_0.0.0.0]
+2025/06/11 00:51:09 🔧 DEBUG: Wave 1, leaderIndex: 1, currentLeader: validator_0.0.0.0, myID: validator1, isLeader: false
+
+=== Integrated Node Status [00:51:09] ===
+🔥 Validator: validator1
+📡 DAG: Round 56, 5 blocks, 2 peers
+🌊 Wave: Wave 1, 0 finalized, 2 peers
+⚡ EVM: Chain ID 1337, RPC on 0.0.0.0:8545
+================================
+2025/06/11 00:51:09 DAG Sync [validator1]: Found 1 blocks from round 55 (from all validators)
+2025/06/11 00:51:09 DAG Sync [validator1]: Referencing blocks from validators: map[validator1:1]
+2025/06/11 00:51:09 DAG Sync [validator1]: Including 0 pending EVM transactions, generating 40000 additional transactions
+2025/06/11 00:51:09 DAG Sync [validator1]: Generating 40000 regular transactions in batches of 1000...
+2025/06/11 00:51:09 DAG Sync [validator1]: Generated 10000/40000 regular transactions...
+2025/06/11 00:51:09 DAG Sync [validator1]: Generated 20000/40000 regular transactions...
+2025/06/11 00:51:09 DAG Sync [validator1]: Generated 30000/40000 regular transactions...
+2025/06/11 00:51:09 DAG Sync [validator1]: Generated 40000/40000 regular transactions...
+2025/06/11 00:51:09 DAG Sync [validator1]: Successfully created 40000 total transactions (0 EVM + 40000 regular)
+2025/06/11 00:51:09 🧹 DAG Cleanup: Removed 1 old blocks, keeping only 5 blocks in memory
+2025/06/11 00:51:09 DAG: Added block 29a9369480f141c4 at height 56, total blocks: 5
+2025/06/11 00:51:09 🧹 DAG Sync [validator1]: Round 56 cleanup - Rounds in memory: 4, Total blocks: 4
+2025/06/11 00:51:09 🔥 DAG Sync [validator1]: CREATED BLOCK Details:
+2025/06/11 00:51:09    📦 Hash: 29a9369480f141c471da718cd8fde9b1f78703c56e2f682656c0f765fb02a1f6
+2025/06/11 00:51:09    🔄 Round: 56
+2025/06/11 00:51:09    📏 Height: 56
+2025/06/11 00:51:09    👤 Validator: validator1
+2025/06/11 00:51:09    🔗 References: 1
+2025/06/11 00:51:09    💼 Transactions: 40000
+2025/06/11 00:51:09    📊 Block Size: 9.54 MB (10000600 bytes)
+2025/06/11 00:51:09    ⏰ Timestamp: 00:51:09
+2025/06/11 00:51:09 DAG Sync [validator1]: Created block for round 56 with 1 references and 40000 transactions (9.54 MB)
+2025/06/11 00:51:09 DAG Sync [validator1]: Broadcasted block (round 56) to 2 peers
+2025/06/11 00:51:10 Wave Consensus [validator1]: ⏳ Waiting for wave 1 to finalize before advancing
